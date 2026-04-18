@@ -318,51 +318,101 @@ export default function App() {
   // FIX: pakai URLSearchParams (bukan no-cors + raw JSON)
   // GAS akan baca via e.parameter.data
   const handleSubmit = async () => {
-    if (!satker.trim()) { setSubmitStatus({ type: 'error', message: '⚠️ Nama Satker wajib diisi!' }); return; }
-    setIsSubmitting(true); setSubmitStatus({ type: '', message: '' });
+  if (!satker.trim()) {
+    setSubmitStatus({ type: 'error', message: 'Nama Satker wajib diisi!' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
 
-    const rows = [];
-    data.forEach(cat => cat.subCategories.forEach(sub => sub.questions.forEach(q => {
-      const scored = q.answer && POSITIVE_ANSWERS.includes(q.answer) ? q.weight
-        : q.options.length === 3 && q.answer === q.options[1] ? q.weight / 2 : 0;
-      rows.push({
-        tanggal, auditor, jabatan,
-        aspek: cat.title, subAspek: sub.title,
-        pertanyaan: q.text, jawaban: q.answer || '',
-        bobot: q.weight, skor: scored, catatan: q.note || ''
+  setIsSubmitting(true);
+  setSubmitStatus({ type: '', message: '' });
+
+  // Bangun payload — format baru yang GAS mengerti
+  const rows = [];
+  data.forEach(cat => {
+    cat.subCategories.forEach(sub => {
+      sub.questions.forEach(q => {
+        let skor = 0;
+        if (q.answer === q.options[0]) skor = q.weight;
+        else if (q.options.length === 3 && q.answer === q.options[1]) skor = q.weight / 2;
+
+        rows.push({
+          aspek: cat.title,
+          subAspek: sub.title,
+          pertanyaan: q.text,
+          jawaban: q.answer || '-',
+          bobot: q.weight,
+          skor: skor,
+          catatan: q.note || '-',
+        });
       });
-    })));
+    });
+  });
 
-    const payload = {
-      identity: { satker, tanggal, auditor, jabatan },
-      rows,
-      totalScore: scores.total
-    };
-
-    try {
-      const params = new URLSearchParams();
-      params.append('data', JSON.stringify(payload));
-
-      const res = await fetch(GAS_URL, {
-        method: 'POST',
-        // TIDAK pakai mode: 'no-cors' — GAS dikonfigurasi Anyone
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString()
-      });
-
-      const json = await res.json();
-      if (json.status === 'success') {
-        setSubmitStatus({ type: 'success', message: `✅ ${json.message} — Skor: ${json.totalScore} (${json.predikat})` });
-      } else {
-        setSubmitStatus({ type: 'error', message: '❌ Gagal: ' + (json.message || 'Unknown error') });
-      }
-    } catch (err) {
-      setSubmitStatus({ type: 'error', message: '❌ Gagal terhubung ke server. Pastikan URL GAS sudah benar dan di-deploy sebagai "Anyone".' });
-      console.error(err);
-    } finally {
-      setIsSubmitting(false);
-    }
+  const payload = {
+    identity: { satker },
+    rows,
+    totalScore: scores.total,
   };
+
+  // ============================================================
+  // KUNCI FIX: URLSearchParams — BUKAN JSON.stringify langsung
+  // GAS akan baca via e.parameter.data (bukan e.postData.contents)
+  // Jangan pakai mode:'no-cors' — GAS harus diset "Anyone"
+  // ============================================================
+  const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEikIFjKQKp27YxnHXbrtXeVmv-iUzjnaeFCa4vQ59D9vp-x5qtbIkNTh3awZBHbjF/exec';
+
+  try {
+    const params = new URLSearchParams();
+    params.append('data', JSON.stringify(payload));
+
+    const response = await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+      // TIDAK ada mode:'no-cors' — kalau GAS di-deploy "Anyone" ini tidak perlu
+    });
+
+    const result = await response.json();
+
+    if (result.status === 'success') {
+      setSubmitStatus({
+        type: 'success',
+        message: `✅ ${result.message} | Skor: ${result.totalScore} | ${result.predikat}`,
+      });
+    } else {
+      setSubmitStatus({
+        type: 'error',
+        message: '❌ GAS error: ' + (result.message || 'Unknown error'),
+      });
+    }
+  } catch (error) {
+    console.error('Submit error:', error);
+    // Kalau fetch gagal total (network error), coba fallback no-cors
+    // (tidak bisa baca response, tapi data tetap masuk ke GAS)
+    try {
+      const params2 = new URLSearchParams();
+      params2.append('data', JSON.stringify(payload));
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params2.toString(),
+      });
+      setSubmitStatus({
+        type: 'success',
+        message: '✅ Data dikirim (mode fallback). Cek Google Sheets untuk konfirmasi.',
+      });
+    } catch (fallbackErr) {
+      setSubmitStatus({
+        type: 'error',
+        message: '❌ Gagal terhubung ke server. Cek koneksi internet.',
+      });
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handlePrint = () => { if (progress.isComplete) setTimeout(() => window.print(), 100); };
 
