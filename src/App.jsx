@@ -363,7 +363,7 @@ export default function App() {
         </table>
         <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
           <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 11 }}>......................., ...................... 2024</p>
+            <p style={{ fontSize: 11 }}>......................., ...................... 2026</p>
             <p style={{ fontSize: 11 }}>Tim Penilai / Auditor,</p>
             <div style={{ height: 60 }} />
             <p style={{ fontSize: 11, borderTop: '1px solid #000', paddingTop: 4, minWidth: 200 }}>{auditor || '___________________________'}</p>
@@ -462,7 +462,7 @@ export default function App() {
               <div className="flex-1 min-w-0">
                 <h1 className="text-base md:text-lg font-bold leading-tight">Form Cek Fisik WBK/WBBM</h1>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-xs text-blue-200">Tahun 2024</p>
+                  <p className="text-xs text-blue-200">Tahun 2026</p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${progress.isComplete ? 'bg-green-500 text-white' : 'bg-blue-800 text-blue-200'}`}>
                     {progress.answered}/{progress.total} Terjawab
                   </span>
