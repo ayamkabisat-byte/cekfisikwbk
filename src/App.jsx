@@ -315,104 +315,97 @@ export default function App() {
   };
 
   // ── Submit ke GAS ─────────────────────────────────────────
-  // FIX: pakai URLSearchParams (bukan no-cors + raw JSON)
-  // GAS akan baca via e.parameter.data
   const handleSubmit = async () => {
-  if (!satker.trim()) {
-    setSubmitStatus({ type: 'error', message: 'Nama Satker wajib diisi!' });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    return;
-  }
+    if (!satker.trim()) {
+      setSubmitStatus({ type: 'error', message: 'Nama Satker wajib diisi!' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
 
-  setIsSubmitting(true);
-  setSubmitStatus({ type: '', message: '' });
+    setIsSubmitting(true);
+    setSubmitStatus({ type: '', message: '' });
 
-  // Bangun payload — format baru yang GAS mengerti
-  const rows = [];
-  data.forEach(cat => {
-    cat.subCategories.forEach(sub => {
-      sub.questions.forEach(q => {
-        let skor = 0;
-        if (q.answer === q.options[0]) skor = q.weight;
-        else if (q.options.length === 3 && q.answer === q.options[1]) skor = q.weight / 2;
+    // Bangun baris data
+    const rows = [];
+    data.forEach(cat => {
+      cat.subCategories.forEach(sub => {
+        sub.questions.forEach(q => {
+          let skor = 0;
+          if (q.answer === q.options[0]) skor = q.weight;
+          else if (q.options.length === 3 && q.answer === q.options[1]) skor = q.weight / 2;
 
-        rows.push({
-          aspek: cat.title,
-          subAspek: sub.title,
-          pertanyaan: q.text,
-          jawaban: q.answer || '-',
-          bobot: q.weight,
-          skor: skor,
-          catatan: q.note || '-',
+          rows.push({
+            aspek: cat.title,
+            subAspek: sub.title,
+            pertanyaan: q.text,
+            jawaban: q.answer || '-',
+            bobot: q.weight,
+            skor: skor,
+            catatan: q.note || '-',
+          });
         });
       });
     });
-  });
 
-  const payload = {
-    identity: { satker },
-    rows,
-    totalScore: scores.total,
-  };
+    // 🔴 FIX BUG 2: Lengkapi object "identity" dengan variabel penilai
+    const payload = {
+      identity: {
+        satker: satker,
+        tanggal: tanggal,
+        auditor: auditor,
+        jabatan: jabatan
+      },
+      rows,
+      totalScore: scores.total,
+    };
 
-  // ============================================================
-  // KUNCI FIX: URLSearchParams — BUKAN JSON.stringify langsung
-  // GAS akan baca via e.parameter.data (bukan e.postData.contents)
-  // Jangan pakai mode:'no-cors' — GAS harus diset "Anyone"
-  // ============================================================
-  const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEikIFjKQKp27YxnHXbrtXeVmv-iUzjnaeFCa4vQ59D9vp-x5qtbIkNTh3awZBHbjF/exec';
-
-  try {
-    const params = new URLSearchParams();
-    params.append('data', JSON.stringify(payload));
-
-    const response = await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-      // TIDAK ada mode:'no-cors' — kalau GAS di-deploy "Anyone" ini tidak perlu
-    });
-
-    const result = await response.json();
-
-    if (result.status === 'success') {
-      setSubmitStatus({
-        type: 'success',
-        message: `✅ ${result.message} | Skor: ${result.totalScore} | ${result.predikat}`,
-      });
-    } else {
-      setSubmitStatus({
-        type: 'error',
-        message: '❌ GAS error: ' + (result.message || 'Unknown error'),
-      });
-    }
-  } catch (error) {
-    console.error('Submit error:', error);
-    // Kalau fetch gagal total (network error), coba fallback no-cors
-    // (tidak bisa baca response, tapi data tetap masuk ke GAS)
     try {
-      const params2 = new URLSearchParams();
-      params2.append('data', JSON.stringify(payload));
-      await fetch(GOOGLE_SCRIPT_URL, {
+      // 🔴 FIX BUG 1 & 3:
+      // Menggunakan `GAS_URL` secara global (bukan hardcoded URL lama).
+      // Kirim sebagai RAW JSON (text/plain) untuk menghindari error blokir CORS/Redirect 302
+      const response = await fetch(GAS_URL, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params2.toString(),
+        body: JSON.stringify(payload), 
+        // fetch tanpa headers Content-Type secara otomatis akan dianggap text/plain
+        // ini aman dan diizinkan penuh oleh Google Apps Script tanpa CORS preflight
       });
-      setSubmitStatus({
-        type: 'success',
-        message: '✅ Data dikirim (mode fallback). Cek Google Sheets untuk konfirmasi.',
-      });
-    } catch (fallbackErr) {
-      setSubmitStatus({
-        type: 'error',
-        message: '❌ Gagal terhubung ke server. Cek koneksi internet.',
-      });
+
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        setSubmitStatus({
+          type: 'success',
+          message: `✅ ${result.message} | Skor: ${result.totalScore} | ${result.predikat}`,
+        });
+      } else {
+        setSubmitStatus({
+          type: 'error',
+          message: '❌ GAS error: ' + (result.message || 'Unknown error'),
+        });
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      // Fallback jika fetch terblokir masalah network lokal (terjadi mode no-cors darurat)
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify(payload),
+        });
+        setSubmitStatus({
+          type: 'success',
+          message: '✅ Data dikirim (mode fallback no-cors). Cek Google Sheets untuk konfirmasi.',
+        });
+      } catch (fallbackErr) {
+        setSubmitStatus({
+          type: 'error',
+          message: '❌ Gagal terhubung ke server. Cek koneksi internet.',
+        });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   const handlePrint = () => { if (progress.isComplete) setTimeout(() => window.print(), 100); };
 
@@ -428,7 +421,7 @@ export default function App() {
       ══════════════════════════════════════════ */}
       <div className="print-only">
 
-        {/* Header print — lebih besar, portrait */}
+        {/* Header print */}
         <div className="print-header-wrap">
           <img
             src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'}
@@ -598,7 +591,7 @@ export default function App() {
         {/* MAIN */}
         <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
 
-          {/* ── Header image — FIX: lebih besar ── */}
+          {/* ── Header image ── */}
           <div className={`w-full border-b flex justify-center items-center py-4 relative ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <button className="md:hidden absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gray-100 dark:bg-gray-700" onClick={() => setIsSidebarOpen(true)}>
               <Menu size={22} />
@@ -617,7 +610,6 @@ export default function App() {
               <div className="flex-1 min-w-0">
                 <h1 className="text-sm md:text-base font-bold leading-tight">Form Cek Fisik Pembangunan ZI WBK/WBBM</h1>
                 <div className="flex items-center gap-2 mt-0.5">
-                  {/* FIX: 2026 */}
                   <p className="text-xs text-blue-200">Tahun 2026</p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${progress.isComplete ? 'bg-green-500 text-white' : 'bg-blue-800 text-blue-200'}`}>
                     {progress.answered}/{progress.total} Terjawab
@@ -772,7 +764,7 @@ export default function App() {
               {isSubmitting ? 'Mengirim...' : 'Kirim ke Sheets'}
             </button>
 
-            {/* FIX: Cetak hanya muncul & aktif jika 100% selesai + satker diisi */}
+            {/* Cetak aktif jika selesai */}
             {progress.isComplete ? (
               <button onClick={handlePrint}
                 className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white text-sm font-bold shadow-md transition-all">
