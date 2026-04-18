@@ -7,10 +7,10 @@ import {
 // ============================================================
 // ⚠️ GANTI URL INI DENGAN URL DEPLOY GOOGLE APPS SCRIPT ANDA
 // ============================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyEikIFjKQKp27YxnHXbrtXeVmv-iUzjnaeFCa4vQ59D9vp-x5qtbIkNTh3awZBHbjF/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwQ29y8240MueaQ52NiWYJ3q495qsvjuhmVzgAHOsE4SABPcISIro1BfhYMJ2aquPKy/exec';
 
 // ============================================================
-// DATA LENGKAP — Teks TIDAK disingkat sesuai file Excel asli
+// DATA LENGKAP — Teks tidak disingkat, sesuai instrumen asli
 // ============================================================
 const initialData = [
   {
@@ -239,23 +239,29 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
 
+  // ── Init ──────────────────────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem('theme');
     if (saved === 'dark') setIsDark(true);
+
+    // FIX: print portrait + ukuran A4
     const style = document.createElement('style');
     style.innerHTML = `
       @media print {
-        @page { size: landscape; margin: 10mm; }
-        body { background: white !important; color: black !important; }
+        @page { size: A4 portrait; margin: 12mm 10mm; }
+        body { background: white !important; color: black !important; font-family: Arial, sans-serif; }
         .no-print { display: none !important; }
         .print-only { display: block !important; }
-        table { width: 100%; border-collapse: collapse; font-size: 10px; }
-        th, td { border: 1px solid #333; padding: 5px 7px; text-align: left; vertical-align: top; }
-        th { background: #1e3a6e !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .print-header-wrap { display: block !important; text-align: center; margin-bottom: 14px; border-bottom: 2px solid #1e3a6e; padding-bottom: 10px; }
+        .print-header-img { max-height: 90px; display: block; margin: 0 auto 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 10px; }
+        th, td { border: 1px solid #555; padding: 4px 6px; text-align: left; vertical-align: top; }
+        th { background: #1e3a6e !important; color: white !important; font-size: 8pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         tr.aspek-row td { background: #dbeafe !important; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         tr.sub-row td { background: #f0f4ff !important; font-style: italic; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .ans-pos { color: #15803d; font-weight: 700; }
-        .ans-neg { color: #dc2626; font-weight: 700; }
+        .ans-pos { color: #15803d !important; font-weight: 700; }
+        .ans-neg { color: #dc2626 !important; font-weight: 700; }
+        tr { page-break-inside: avoid; }
       }
       .print-only { display: none; }
     `;
@@ -267,6 +273,7 @@ export default function App() {
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
+  // ── Scoring ───────────────────────────────────────────────
   const { scores, progress, categoryProgress } = useMemo(() => {
     let totalScore = 0, totalQ = 0, answeredQ = 0;
     const catScores = {}, catProg = {};
@@ -287,6 +294,7 @@ export default function App() {
     return { scores: { total: totalScore, categories: catScores }, progress: { total: totalQ, answered: answeredQ, isComplete }, categoryProgress: catProg };
   }, [data, satker]);
 
+  // ── Handlers ──────────────────────────────────────────────
   const handleAnswer = (catId, subId, qId, value) =>
     setData(prev => prev.map(c => c.id !== catId ? c : { ...c, subCategories: c.subCategories.map(s => s.id !== subId ? s : { ...s, questions: s.questions.map(q => q.id !== qId ? q : { ...q, answer: value }) }) }));
 
@@ -300,60 +308,153 @@ export default function App() {
     setIsSidebarOpen(false);
   };
 
-  const handleReset = () => { setData(initialData); setSatker(''); setAuditor(''); setJabatan(''); setTanggal(new Date().toISOString().split('T')[0]); setShowResetModal(false); setSubmitStatus({ type: '', message: '' }); };
+  const handleReset = () => {
+    setData(initialData); setSatker(''); setAuditor(''); setJabatan('');
+    setTanggal(new Date().toISOString().split('T')[0]);
+    setShowResetModal(false); setSubmitStatus({ type: '', message: '' });
+  };
 
+  // ── Submit ke GAS ─────────────────────────────────────────
+  // FIX: pakai URLSearchParams (bukan no-cors + raw JSON)
+  // GAS akan baca via e.parameter.data
   const handleSubmit = async () => {
     if (!satker.trim()) { setSubmitStatus({ type: 'error', message: '⚠️ Nama Satker wajib diisi!' }); return; }
     setIsSubmitting(true); setSubmitStatus({ type: '', message: '' });
+
     const rows = [];
     data.forEach(cat => cat.subCategories.forEach(sub => sub.questions.forEach(q => {
-      const scored = q.answer && POSITIVE_ANSWERS.includes(q.answer) ? q.weight : q.options.length === 3 && q.answer === q.options[1] ? q.weight / 2 : 0;
-      rows.push({ timestamp: new Date().toLocaleString('id-ID'), unitKerja: satker, tanggal, auditor, jabatan, aspek: cat.title, subAspek: sub.title, pertanyaan: q.text, jawaban: q.answer || '', bobot: q.weight, skor: scored, catatan: q.note, totalSkor: scores.total.toFixed(4) });
+      const scored = q.answer && POSITIVE_ANSWERS.includes(q.answer) ? q.weight
+        : q.options.length === 3 && q.answer === q.options[1] ? q.weight / 2 : 0;
+      rows.push({
+        tanggal, auditor, jabatan,
+        aspek: cat.title, subAspek: sub.title,
+        pertanyaan: q.text, jawaban: q.answer || '',
+        bobot: q.weight, skor: scored, catatan: q.note || ''
+      });
     })));
+
+    const payload = {
+      identity: { satker, tanggal, auditor, jabatan },
+      rows,
+      totalScore: scores.total
+    };
+
     try {
       const params = new URLSearchParams();
-      params.append('data', JSON.stringify({ identity: { satker, tanggal, auditor, jabatan }, rows, totalScore: scores.total }));
-      const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params });
+      params.append('data', JSON.stringify(payload));
+
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        // TIDAK pakai mode: 'no-cors' — GAS dikonfigurasi Anyone
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+      });
+
       const json = await res.json();
-      setSubmitStatus(json.status === 'success' ? { type: 'success', message: '✅ Data berhasil dikirim ke Google Sheets!' } : { type: 'error', message: '❌ Gagal: ' + (json.message || 'Error') });
-    } catch { setSubmitStatus({ type: 'error', message: '❌ Gagal terhubung. Cek URL GAS.' }); }
-    finally { setIsSubmitting(false); }
+      if (json.status === 'success') {
+        setSubmitStatus({ type: 'success', message: `✅ ${json.message} — Skor: ${json.totalScore} (${json.predikat})` });
+      } else {
+        setSubmitStatus({ type: 'error', message: '❌ Gagal: ' + (json.message || 'Unknown error') });
+      }
+    } catch (err) {
+      setSubmitStatus({ type: 'error', message: '❌ Gagal terhubung ke server. Pastikan URL GAS sudah benar dan di-deploy sebagai "Anyone".' });
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handlePrint = () => { if (progress.isComplete) setTimeout(() => window.print(), 100); };
 
   const dk = isDark;
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
 
+  // ── Render ────────────────────────────────────────────────
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${dk ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-800'}`}>
 
-      {/* ===== PRINT CONTENT ===== */}
+      {/* ══════════════════════════════════════════
+          PRINT CONTENT — hanya muncul saat print
+      ══════════════════════════════════════════ */}
       <div className="print-only">
-        <div style={{ textAlign: 'center', marginBottom: 12 }}>
-          <img src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'}
-            alt="Header" style={{ maxHeight: 80, margin: '0 auto', display: 'block' }}
-            onError={e => { e.target.style.display = 'none'; }} />
-          <h2 style={{ fontSize: 13, fontWeight: 'bold', margin: '6px 0' }}>FORM PENILAIAN CEK FISIK ATAS PEMBANGUNAN ZI WBK/WBBM TAHUN 2026</h2>
-          <table style={{ width: '55%', margin: '6px auto', fontSize: 11, borderCollapse: 'collapse' }}>
-            <tbody>
-              {[['Unit Kerja', satker], ['Tanggal', tanggal ? new Date(tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-'], ['Auditor/Penilai', auditor], ['Jabatan', jabatan], ['Total Skor', scores.total.toFixed(4)]].map(([k, v]) => (
-                <tr key={k}><td style={{ border: '1px solid #999', padding: '3px 8px', fontWeight: 'bold', width: '35%' }}>{k}</td><td style={{ border: '1px solid #999', padding: '3px 8px' }}>{v || '-'}</td></tr>
-              ))}
-            </tbody>
-          </table>
+
+        {/* Header print — lebih besar, portrait */}
+        <div className="print-header-wrap">
+          <img
+            src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'}
+            alt="Header" className="print-header-img"
+            onError={e => { e.target.style.display = 'none'; }}
+          />
+          <div style={{ fontSize: '11pt', fontWeight: 'bold', marginBottom: 2 }}>
+            KEMENTERIAN PENDIDIKAN, KEBUDAYAAN, RISET, DAN TEKNOLOGI
+          </div>
+          <div style={{ fontSize: '13pt', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 }}>
+            FORM PENILAIAN CEK FISIK
+          </div>
+          <div style={{ fontSize: '11pt', fontWeight: 'bold' }}>
+            PEMBANGUNAN ZONA INTEGRITAS WBK/WBBM TAHUN 2026
+          </div>
         </div>
+
+        {/* Identitas */}
+        <table style={{ width: '100%', marginBottom: 10, fontSize: '9pt' }}>
+          <tbody>
+            {[
+              ['Unit Kerja / Satker', satker || '-'],
+              ['Tanggal Penilaian', formatDate(tanggal)],
+              ['Auditor / Penilai', auditor || '-'],
+              ['Jabatan / NIP', jabatan || '-'],
+              ['Total Skor Akhir', `${scores.total.toFixed(4)} — ${scores.total >= 85 ? 'WBBM ⭐⭐' : scores.total >= 75 ? 'WBK ⭐' : 'Belum Memenuhi'}`],
+            ].map(([k, v]) => (
+              <tr key={k}>
+                <td style={{ border: '1px solid #999', padding: '3px 8px', fontWeight: 'bold', width: '30%', background: '#f8f9fa' }}>{k}</td>
+                <td style={{ border: '1px solid #999', padding: '3px 8px' }}>{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Tabel matriks pertanyaan */}
         <table>
-          <thead><tr><th style={{ width: '5%' }}>No.</th><th style={{ width: '17%' }}>Aspek</th><th style={{ width: '18%' }}>Sub Aspek</th><th style={{ width: '31%' }}>Pertanyaan</th><th style={{ width: '10%' }}>Jawaban</th><th style={{ width: '12%' }}>Catatan</th><th style={{ width: '7%' }}>Bobot</th></tr></thead>
+          <thead>
+            <tr>
+              <th style={{ width: '6%' }}>No.</th>
+              <th style={{ width: '16%' }}>Aspek</th>
+              <th style={{ width: '17%' }}>Sub Aspek</th>
+              <th style={{ width: '33%' }}>Pertanyaan</th>
+              <th style={{ width: '10%' }}>Jawaban</th>
+              <th style={{ width: '11%' }}>Catatan</th>
+              <th style={{ width: '7%' }}>Bobot</th>
+            </tr>
+          </thead>
           <tbody>
             {data.map((cat, ci) => (
               <React.Fragment key={cat.id}>
-                <tr className="aspek-row"><td>{ci + 1}</td><td colSpan={6}><strong>{cat.title}</strong> — Skor: {(scores.categories[cat.id]?.current || 0).toFixed(3)}</td></tr>
+                <tr className="aspek-row">
+                  <td>{ci + 1}</td>
+                  <td colSpan={6}><strong>{cat.title}</strong> &nbsp;|&nbsp; Skor: <strong>{(scores.categories[cat.id]?.current || 0).toFixed(3)}</strong></td>
+                </tr>
                 {cat.subCategories.map((sub, si) => (
                   <React.Fragment key={sub.id}>
-                    {sub.questions.length > 1 && <tr className="sub-row"><td></td><td></td><td colSpan={5}><em>{sub.title}</em></td></tr>}
+                    {sub.questions.length > 1 && (
+                      <tr className="sub-row">
+                        <td></td><td></td>
+                        <td colSpan={5}><em>{sub.title}</em></td>
+                      </tr>
+                    )}
                     {sub.questions.map((q, qi) => {
                       const pos = q.answer && POSITIVE_ANSWERS.includes(q.answer);
-                      return (<tr key={q.id}><td style={{ textAlign: 'center' }}>{ci + 1}.{String.fromCharCode(97 + si)}.{qi + 1}</td><td></td><td>{sub.questions.length === 1 ? sub.title : ''}</td><td>{q.text}</td><td className={q.answer ? (pos ? 'ans-pos' : 'ans-neg') : ''}>{q.answer || '-'}</td><td>{q.note || ''}</td><td style={{ textAlign: 'center' }}>{q.weight.toFixed(3)}</td></tr>);
+                      return (
+                        <tr key={q.id}>
+                          <td style={{ textAlign: 'center' }}>{ci + 1}.{String.fromCharCode(97 + si)}.{qi + 1}</td>
+                          <td></td>
+                          <td>{sub.questions.length === 1 ? sub.title : ''}</td>
+                          <td>{q.text}</td>
+                          <td className={q.answer ? (pos ? 'ans-pos' : 'ans-neg') : ''}>{q.answer || '-'}</td>
+                          <td>{q.note || ''}</td>
+                          <td style={{ textAlign: 'center' }}>{q.weight.toFixed(3)}</td>
+                        </tr>
+                      );
                     })}
                   </React.Fragment>
                 ))}
@@ -361,17 +462,22 @@ export default function App() {
             ))}
           </tbody>
         </table>
-        <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
+
+        {/* Tanda tangan */}
+        <div style={{ marginTop: 28, display: 'flex', justifyContent: 'flex-end' }}>
           <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 11 }}>......................., ...................... 2026</p>
-            <p style={{ fontSize: 11 }}>Tim Penilai / Auditor,</p>
-            <div style={{ height: 60 }} />
-            <p style={{ fontSize: 11, borderTop: '1px solid #000', paddingTop: 4, minWidth: 200 }}>{auditor || '___________________________'}</p>
+            <p style={{ fontSize: '9pt', margin: 0 }}>......................., ...................... 2026</p>
+            <p style={{ fontSize: '9pt', margin: '4px 0' }}>Tim Penilai / Auditor,</p>
+            <div style={{ height: 55 }} />
+            <p style={{ fontSize: '9pt', borderTop: '1px solid #000', paddingTop: 3, minWidth: 180, margin: 0 }}>{auditor || '___________________________'}</p>
+            {jabatan && <p style={{ fontSize: '8pt', margin: '2px 0 0' }}>{jabatan}</p>}
           </div>
         </div>
       </div>
 
-      {/* ===== WEB UI ===== */}
+      {/* ══════════════════════════════════════════
+          WEB UI
+      ══════════════════════════════════════════ */}
       <div className="no-print flex flex-col md:flex-row min-h-screen">
 
         {/* SIDEBAR */}
@@ -380,88 +486,88 @@ export default function App() {
           ${dk ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-200'}`}>
 
           <div className={`p-4 flex justify-between items-center border-b ${dk ? 'border-gray-700' : 'border-gray-200'}`}>
-            <h2 className={`font-bold text-base ${dk ? 'text-blue-400' : 'text-blue-600'}`}>Progress Isian</h2>
-            <button className="md:hidden p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => setIsSidebarOpen(false)}><X size={20} /></button>
+            <h2 className={`font-bold text-sm ${dk ? 'text-blue-400' : 'text-blue-600'}`}>Progress Isian</h2>
+            <button className="md:hidden p-1 rounded" onClick={() => setIsSidebarOpen(false)}><X size={18} /></button>
           </div>
 
-          <div className="p-4 space-y-4 overflow-y-auto h-full pb-24">
-            {/* Satker status */}
-            <div>
-              <p className={`text-xs font-semibold mb-2 uppercase tracking-wider ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Data Umum</p>
-              <div className={`flex items-center gap-2 text-sm p-2.5 rounded-xl ${dk ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                {satker.trim() ? <CheckCircle size={16} className="text-green-500 shrink-0" /> : <AlertCircle size={16} className="text-orange-500 shrink-0" />}
-                <span className={`text-xs font-medium ${satker.trim() ? (dk ? 'text-green-400' : 'text-green-700') : 'text-orange-500'}`}>
-                  {satker.trim() ? 'Nama Satker ✓' : 'Nama Satker belum diisi'}
-                </span>
-              </div>
+          <div className="p-3 overflow-y-auto h-full pb-28 space-y-3">
+            {/* Satker */}
+            <div className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-medium ${dk ? 'bg-gray-700' : 'bg-gray-50'}`}>
+              {satker.trim()
+                ? <CheckCircle size={15} className="text-green-500 shrink-0" />
+                : <AlertCircle size={15} className="text-orange-500 shrink-0" />}
+              <span className={satker.trim() ? (dk ? 'text-green-400' : 'text-green-700') : 'text-orange-500'}>
+                {satker.trim() ? `Satker: ${satker.substring(0, 20)}${satker.length > 20 ? '…' : ''}` : 'Nama Satker belum diisi'}
+              </span>
             </div>
 
-            {/* Per-aspek */}
-            <div>
-              <p className={`text-xs font-semibold mb-2 uppercase tracking-wider border-t pt-3 ${dk ? 'border-gray-700 text-gray-400' : 'border-gray-100 text-gray-500'}`}>Aspek Penilaian</p>
-              <div className="space-y-2">
-                {data.map((cat, idx) => {
-                  const stat = categoryProgress[cat.id];
-                  const isDone = stat.answered === stat.total;
-                  const pct = stat.total > 0 ? Math.round(stat.answered / stat.total * 100) : 0;
-                  return (
-                    <div key={cat.id} onClick={() => scrollToCat(cat.id)}
-                      className={`cursor-pointer group p-3 rounded-xl border transition-all
-                        ${isDone ? (dk ? 'bg-green-900/20 border-green-800/50' : 'bg-green-50 border-green-200')
-                          : stat.answered > 0 ? (dk ? 'bg-blue-900/20 border-blue-800/40 hover:bg-blue-900/30' : 'bg-blue-50 border-blue-100 hover:bg-blue-100')
-                          : (dk ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-100 hover:bg-gray-50')}`}>
-                      <div className="flex justify-between items-start gap-2 mb-2">
-                        <span className={`text-xs font-semibold line-clamp-2 leading-tight ${isDone ? (dk ? 'text-green-400' : 'text-green-700') : (dk ? 'text-gray-300' : 'text-gray-700')}`}>
-                          {idx + 1}. {cat.title.replace(/^\d+\.\s*/, '')}
+            {/* Per aspek */}
+            <p className={`text-[10px] font-bold uppercase tracking-wider ${dk ? 'text-gray-500' : 'text-gray-400'}`}>Aspek Penilaian</p>
+            {data.map((cat, idx) => {
+              const stat = categoryProgress[cat.id];
+              const isDone = stat.answered === stat.total;
+              const pct = stat.total > 0 ? Math.round(stat.answered / stat.total * 100) : 0;
+              return (
+                <div key={cat.id} onClick={() => scrollToCat(cat.id)}
+                  className={`cursor-pointer p-2.5 rounded-xl border transition-all
+                    ${isDone
+                      ? (dk ? 'bg-green-900/20 border-green-800/50' : 'bg-green-50 border-green-200')
+                      : stat.answered > 0
+                        ? (dk ? 'bg-blue-900/20 border-blue-800/30 hover:bg-blue-900/30' : 'bg-blue-50/70 border-blue-100 hover:bg-blue-100')
+                        : (dk ? 'border-gray-700 hover:bg-gray-700/40' : 'border-gray-100 hover:bg-gray-50')
+                    }`}>
+                  <div className="flex justify-between items-start gap-1 mb-1.5">
+                    <span className={`text-xs font-semibold leading-tight line-clamp-2 ${isDone ? (dk ? 'text-green-400' : 'text-green-700') : (dk ? 'text-gray-200' : 'text-gray-700')}`}>
+                      {idx + 1}. {cat.title.replace(/^\d+\.\s*/, '')}
+                    </span>
+                    {isDone
+                      ? <CheckCircle size={13} className="text-green-500 shrink-0 mt-0.5" />
+                      : <span className={`text-[9px] shrink-0 px-1.5 py-0.5 rounded-full font-bold ${stat.answered > 0 ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                          {stat.total - stat.answered} sisa
                         </span>
-                        {isDone
-                          ? <CheckCircle size={14} className="text-green-500 shrink-0 mt-0.5" />
-                          : <span className={`text-[10px] shrink-0 font-bold px-1.5 py-0.5 rounded-full ${stat.answered > 0 ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-                              {stat.total - stat.answered} sisa
-                            </span>
-                        }
-                      </div>
-                      <div className={`w-full h-1.5 rounded-full ${dk ? 'bg-gray-600' : 'bg-gray-200'} mb-1`}>
-                        <div className={`h-full rounded-full transition-all duration-300 ${isDone ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
-                      </div>
-                      <div className={`text-right text-[10px] ${dk ? 'text-gray-400' : 'text-gray-500'}`}>{stat.answered} / {stat.total}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                    }
+                  </div>
+                  <div className={`w-full h-1.5 rounded-full ${dk ? 'bg-gray-600' : 'bg-gray-200'}`}>
+                    <div className={`h-full rounded-full transition-all duration-300 ${isDone ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className={`text-right text-[9px] mt-0.5 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>{stat.answered}/{stat.total}</div>
+                </div>
+              );
+            })}
 
-            {/* Score summary */}
+            {/* Skor total */}
             <div className={`p-3 rounded-xl text-center border ${dk ? 'bg-blue-900/30 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
-              <p className={`text-xs ${dk ? 'text-blue-300' : 'text-blue-600'}`}>Total Skor Saat Ini</p>
-              <p className={`text-2xl font-extrabold ${dk ? 'text-yellow-400' : 'text-blue-700'}`}>{scores.total.toFixed(2)}</p>
-              <p className={`text-xs ${dk ? 'text-gray-400' : 'text-gray-500'}`}>{progress.answered}/{progress.total} terjawab</p>
+              <p className={`text-[10px] ${dk ? 'text-blue-300' : 'text-blue-600'}`}>Total Skor</p>
+              <p className={`text-2xl font-extrabold leading-none ${dk ? 'text-yellow-400' : 'text-blue-800'}`}>{scores.total.toFixed(2)}</p>
+              <p className={`text-[10px] mt-0.5 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>{progress.answered}/{progress.total} terjawab</p>
             </div>
           </div>
         </div>
-
         {isSidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
 
-        {/* MAIN CONTENT */}
+        {/* MAIN */}
         <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
 
-          {/* Header Image */}
-          <div className={`w-full border-b flex justify-center items-center py-3 relative ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          {/* ── Header image — FIX: lebih besar ── */}
+          <div className={`w-full border-b flex justify-center items-center py-4 relative ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <button className="md:hidden absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gray-100 dark:bg-gray-700" onClick={() => setIsSidebarOpen(true)}>
               <Menu size={22} />
             </button>
-            <img src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'}
+            <img
+              src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'}
               alt="Header Itjen Kemendikdasmen"
-              className="h-10 md:h-14 object-contain px-4 max-w-full"
-              onError={e => { e.target.style.display = 'none'; e.target.insertAdjacentHTML('afterend', `<span class="text-base font-bold">ITJEN KEMENDIKDASMEN</span>`); }} />
+              className="h-16 md:h-24 object-contain px-4 max-w-full"
+              onError={e => { e.target.style.display = 'none'; e.target.insertAdjacentHTML('afterend', `<div class="text-center"><p class="font-bold text-lg ${dk ? 'text-white' : 'text-gray-800'}">ITJEN KEMENDIKDASMEN</p></div>`); }}
+            />
           </div>
 
-          {/* Sticky header */}
-          <header className={`sticky top-0 z-20 shadow-md backdrop-blur-md bg-opacity-95 ${dk ? 'bg-blue-950 text-white' : 'bg-blue-700 text-white'}`}>
+          {/* ── Sticky app header ── */}
+          <header className={`sticky top-0 z-20 shadow-md ${dk ? 'bg-blue-950 text-white' : 'bg-blue-700 text-white'}`}>
             <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center gap-3">
               <div className="flex-1 min-w-0">
-                <h1 className="text-base md:text-lg font-bold leading-tight">Form Cek Fisik WBK/WBBM</h1>
+                <h1 className="text-sm md:text-base font-bold leading-tight">Form Cek Fisik Pembangunan ZI WBK/WBBM</h1>
                 <div className="flex items-center gap-2 mt-0.5">
+                  {/* FIX: 2026 */}
                   <p className="text-xs text-blue-200">Tahun 2026</p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${progress.isComplete ? 'bg-green-500 text-white' : 'bg-blue-800 text-blue-200'}`}>
                     {progress.answered}/{progress.total} Terjawab
@@ -484,18 +590,24 @@ export default function App() {
             </div>
           </header>
 
+          {/* ── Content ── */}
           <main className="max-w-4xl w-full mx-auto p-4 space-y-5 pb-28">
 
             {submitStatus.message && (
-              <div className={`p-4 rounded-xl flex items-start gap-3 border text-sm font-medium ${submitStatus.type === 'success' ? (dk ? 'bg-green-900/30 text-green-300 border-green-800' : 'bg-green-50 text-green-800 border-green-200') : (dk ? 'bg-red-900/30 text-red-300 border-red-800' : 'bg-red-50 text-red-800 border-red-200')}`}>
-                {submitStatus.type === 'success' ? <CheckCircle size={18} className="shrink-0" /> : <AlertCircle size={18} className="shrink-0" />}
+              <div className={`p-4 rounded-xl flex items-start gap-3 border text-sm font-medium ${
+                submitStatus.type === 'success'
+                  ? (dk ? 'bg-green-900/30 text-green-300 border-green-800' : 'bg-green-50 text-green-800 border-green-200')
+                  : (dk ? 'bg-red-900/30 text-red-300 border-red-800' : 'bg-red-50 text-red-800 border-red-200')}`}>
+                {submitStatus.type === 'success' ? <CheckCircle size={18} className="shrink-0 mt-0.5" /> : <AlertCircle size={18} className="shrink-0 mt-0.5" />}
                 <p>{submitStatus.message}</p>
               </div>
             )}
 
-            {/* Identity */}
+            {/* Identity Card */}
             <div className={`p-5 rounded-2xl border shadow-sm ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-              <h2 className={`text-sm font-bold mb-4 flex items-center gap-2 ${dk ? 'text-blue-400' : 'text-blue-600'}`}><FileSpreadsheet size={16} /> Identitas Penilaian</h2>
+              <h2 className={`text-sm font-bold mb-4 flex items-center gap-2 ${dk ? 'text-blue-400' : 'text-blue-600'}`}>
+                <FileSpreadsheet size={16} /> Identitas Penilaian
+              </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
                   <label className={`block text-xs font-semibold mb-1 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Nama Satker / Unit Kerja <span className="text-red-500">*</span></label>
@@ -508,7 +620,7 @@ export default function App() {
                     className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
                 </div>
                 <div>
-                  <label className={`block text-xs font-semibold mb-1 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Nama Auditor/Penilai</label>
+                  <label className={`block text-xs font-semibold mb-1 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Nama Auditor / Penilai</label>
                   <input type="text" value={auditor} onChange={e => setAuditor(e.target.value)} placeholder="Nama lengkap"
                     className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
                 </div>
@@ -523,25 +635,30 @@ export default function App() {
             {/* Aspek Cards */}
             {data.map((cat, ci) => (
               <div key={cat.id} id={cat.id} className={`rounded-2xl border overflow-hidden shadow-sm ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+
                 <button onClick={() => setExpandedCats(p => ({ ...p, [cat.id]: !p[cat.id] }))}
                   className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-colors ${dk ? 'bg-blue-900/60 hover:bg-blue-900/80' : 'bg-blue-700 hover:bg-blue-800'} text-white`}>
-                  <span className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-extrabold text-base flex-shrink-0">{ci + 1}</span>
+                  <span className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-extrabold flex-shrink-0">{ci + 1}</span>
                   <span className="flex-1 font-bold text-sm md:text-base leading-tight">{cat.title.replace(/^\d+\.\s*/, '')}</span>
-                  <span className="text-xs font-bold bg-white/20 px-2 py-1 rounded-full">{(scores.categories[cat.id]?.current || 0).toFixed(2)} pts</span>
+                  <span className="text-xs bg-white/20 px-2 py-1 rounded-full font-bold">{(scores.categories[cat.id]?.current || 0).toFixed(2)} pts</span>
                   {(() => {
                     const s = categoryProgress[cat.id];
                     return s.answered === s.total
-                      ? <CheckCircle size={18} className="text-green-400 flex-shrink-0" />
+                      ? <CheckCircle size={17} className="text-green-400 flex-shrink-0" />
                       : <span className="text-xs bg-orange-500/30 text-orange-200 px-2 py-0.5 rounded-full flex-shrink-0">{s.total - s.answered} sisa</span>;
                   })()}
-                  {expandedCats[cat.id] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  {expandedCats[cat.id] ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
                 </button>
 
                 {expandedCats[cat.id] && cat.subCategories.map((sub, si) => (
                   <div key={sub.id} className={`border-b last:border-b-0 ${dk ? 'border-gray-700' : 'border-gray-100'}`}>
                     <div className={`flex items-start gap-3 px-5 py-2.5 ${dk ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                      <span className="w-6 h-6 rounded-md bg-amber-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">{String.fromCharCode(97 + si)}</span>
-                      <span className={`text-sm font-semibold flex-1 leading-snug ${dk ? 'text-gray-200' : 'text-gray-700'}`}>{sub.title.replace(/^[a-z]\.\s*/i, '')}</span>
+                      <span className="w-6 h-6 rounded-md bg-amber-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">
+                        {String.fromCharCode(97 + si)}
+                      </span>
+                      <span className={`text-sm font-semibold flex-1 leading-snug ${dk ? 'text-gray-200' : 'text-gray-700'}`}>
+                        {sub.title.replace(/^[a-z]\.\s*/i, '')}
+                      </span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${sub.questions.every(q => q.answer !== null) ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : `${dk ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'}`}`}>
                         {sub.questions.filter(q => q.answer !== null).length}/{sub.questions.length}
                       </span>
@@ -550,27 +667,27 @@ export default function App() {
                     {sub.questions.map(q => {
                       const answered = q.answer !== null;
                       return (
-                        <div key={q.id} className={`px-5 py-3 border-b last:border-b-0 ${answered ? (dk ? 'bg-green-900/10' : 'bg-green-50/60') : ''} ${dk ? 'border-gray-700/50' : 'border-gray-100'}`}>
+                        <div key={q.id} className={`px-5 py-3 border-b last:border-b-0 transition-colors ${answered ? (dk ? 'bg-green-900/10' : 'bg-green-50/50') : ''} ${dk ? 'border-gray-700/50' : 'border-gray-100'}`}>
                           <p className={`text-sm mb-2.5 leading-relaxed ${dk ? 'text-gray-300' : 'text-gray-700'}`}>{q.text}</p>
                           <div className="flex flex-wrap gap-2 mb-2.5">
                             {q.options.map(opt => {
-                              const isSelected = q.answer === opt;
+                              const isSel = q.answer === opt;
                               const isPos = POSITIVE_ANSWERS.includes(opt);
-                              const isPartial = q.options.length === 3 && opt === q.options[1];
+                              const isPar = q.options.length === 3 && opt === q.options[1];
                               let cls = 'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ';
-                              if (isSelected) cls += isPos ? 'bg-green-500 border-green-500 text-white shadow-sm' : isPartial ? 'bg-amber-500 border-amber-500 text-white' : 'bg-red-500 border-red-500 text-white shadow-sm';
+                              if (isSel) cls += isPos ? 'bg-green-500 border-green-500 text-white' : isPar ? 'bg-amber-500 border-amber-500 text-white' : 'bg-red-500 border-red-500 text-white';
                               else cls += dk ? 'bg-gray-700 border-gray-600 text-gray-300 hover:border-blue-400 hover:text-blue-300' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600';
                               return (
                                 <button key={opt} onClick={() => handleAnswer(cat.id, sub.id, q.id, opt)} className={cls}>
-                                  {isSelected && (isPos ? <CheckCircle size={13} /> : isPartial ? <AlertCircle size={13} /> : <XCircle size={13} />)}
+                                  {isSel && (isPos ? <CheckCircle size={12} /> : isPar ? <AlertCircle size={12} /> : <XCircle size={12} />)}
                                   {opt}
                                 </button>
                               );
                             })}
                           </div>
                           <div className="relative">
-                            <MessageSquareText size={15} className={`absolute top-3 left-3 ${dk ? 'text-gray-500' : 'text-gray-400'}`} />
-                            <input type="text" placeholder="Catatan/temuan fisik..." value={q.note}
+                            <MessageSquareText size={14} className={`absolute top-3 left-3 ${dk ? 'text-gray-500' : 'text-gray-400'}`} />
+                            <input type="text" placeholder="Tambahkan catatan/temuan fisik..." value={q.note}
                               onChange={e => handleNote(cat.id, sub.id, q.id, e.target.value)}
                               className={`w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border outline-none transition-all ${dk ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-500 placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-gray-700 focus:border-blue-400 placeholder-gray-400'}`} />
                           </div>
@@ -581,9 +698,18 @@ export default function App() {
                 ))}
               </div>
             ))}
+
+            {/* Info sisa pertanyaan */}
+            {!progress.isComplete && progress.answered > 0 && (
+              <div className={`p-4 rounded-xl text-center text-sm font-medium border ${dk ? 'bg-orange-900/20 border-orange-800 text-orange-300' : 'bg-orange-50 border-orange-200 text-orange-700'}`}>
+                Masih ada <strong>{progress.total - progress.answered} pertanyaan</strong> belum dijawab.
+                {!satker.trim() && ' Nama Satker juga belum diisi.'}
+                {' '}Lengkapi untuk mengaktifkan tombol Cetak.
+              </div>
+            )}
           </main>
 
-          {/* BOTTOM ACTION BAR */}
+          {/* ── Bottom Action Bar ── */}
           <div className={`fixed bottom-0 left-0 right-0 md:left-64 z-30 border-t px-4 py-3 flex flex-wrap gap-2 shadow-2xl ${dk ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}`}>
             <button onClick={() => setShowResetModal(true)}
               className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${dk ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
@@ -591,35 +717,34 @@ export default function App() {
             </button>
 
             <button onClick={handleSubmit} disabled={isSubmitting || !satker.trim()}
-              className="flex items-center gap-1.5 flex-1 md:flex-none justify-center px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 text-white text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md">
+              className="flex items-center gap-1.5 flex-1 md:flex-none justify-center px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all">
               {isSubmitting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={14} />}
               {isSubmitting ? 'Mengirim...' : 'Kirim ke Sheets'}
             </button>
 
-            {/* Tombol cetak: HANYA MUNCUL jika 100% selesai + satker terisi */}
+            {/* FIX: Cetak hanya muncul & aktif jika 100% selesai + satker diisi */}
             {progress.isComplete ? (
               <button onClick={handlePrint}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white text-sm font-bold shadow-md transition-all animate-pulse-once">
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white text-sm font-bold shadow-md transition-all">
                 <Printer size={14} /> Cetak Laporan
               </button>
             ) : (
-              <div className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm border cursor-default ${dk ? 'border-gray-700 text-gray-600' : 'border-gray-100 text-gray-300 bg-gray-50'}`}
-                title={`Isi semua ${progress.total - progress.answered} pertanyaan tersisa + nama satker untuk mencetak`}>
+              <div className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs cursor-default ${dk ? 'border-gray-700 text-gray-600' : 'border-gray-100 text-gray-300 bg-gray-50'}`}
+                title={`Selesaikan semua pertanyaan dan isi nama satker untuk mencetak`}>
                 <Printer size={14} />
-                <span className="hidden sm:inline text-xs">Cetak ({progress.answered}/{progress.total})</span>
-                <span className="sm:hidden text-xs">Cetak</span>
+                <span className="hidden sm:inline">Cetak ({progress.answered}/{progress.total})</span>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* RESET MODAL */}
+      {/* Reset Modal */}
       {showResetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className={`rounded-2xl p-6 max-w-sm w-full shadow-2xl ${dk ? 'bg-gray-800' : 'bg-white'}`}>
             <h3 className="font-bold text-lg mb-2">⚠️ Reset Form?</h3>
-            <p className={`text-sm mb-5 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Semua jawaban dan catatan akan dihapus. Tindakan ini tidak dapat dibatalkan.</p>
+            <p className={`text-sm mb-5 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Semua jawaban dan catatan akan dihapus. Tidak bisa dibatalkan.</p>
             <div className="flex gap-3">
               <button onClick={() => setShowResetModal(false)} className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold ${dk ? 'border-gray-600 text-gray-300' : 'border-gray-200 text-gray-600'}`}>Batal</button>
               <button onClick={handleReset} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold">Ya, Reset</button>
