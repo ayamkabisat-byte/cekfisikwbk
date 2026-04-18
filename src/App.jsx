@@ -338,16 +338,17 @@ export default function App() {
             aspek: cat.title,
             subAspek: sub.title,
             pertanyaan: q.text,
-            jawaban: q.answer || '-',
-            bobot: q.weight,
-            skor: skor,
-            catatan: q.note || '-',
+            jawaban: q.answer || '',
+            isAnswered: q.answer !== null, // 👈 PENTING: Penanda apakah user ini menjawab
+            bobot: Number(q.weight.toFixed(4)),
+            skor: Number(skor.toFixed(4)),
+            catatan: q.note || '',
           });
         });
       });
     });
 
-    // 🔴 FIX BUG 2: Lengkapi object "identity" dengan variabel penilai
+    // 🔴 Payload dimodifikasi untuk skor presisi
     const payload = {
       identity: {
         satker: satker,
@@ -356,7 +357,7 @@ export default function App() {
         jabatan: jabatan
       },
       rows,
-      totalScore: scores.total,
+      totalScore: Number(scores.total.toFixed(2)),
     };
 
     try {
@@ -375,7 +376,8 @@ export default function App() {
       if (result.status === 'success') {
         setSubmitStatus({
           type: 'success',
-          message: `✅ ${result.message} | Skor: ${result.totalScore} | ${result.predikat}`,
+          // 🔴 Menampilkan skor GABUNGAN hasil dari perhitungan backend
+          message: `✅ Berhasil disimpan! | Skor Gabungan Tim: ${result.totalScore} | Predikat: ${result.predikat}`,
         });
       } else {
         setSubmitStatus({
@@ -447,7 +449,8 @@ export default function App() {
               ['Tanggal Penilaian', formatDate(tanggal)],
               ['Auditor / Penilai', auditor || '-'],
               ['Jabatan / NIP', jabatan || '-'],
-              ['Total Skor Akhir', `${scores.total.toFixed(4)} — ${scores.total >= 85 ? 'WBBM ⭐⭐' : scores.total >= 75 ? 'WBK ⭐' : 'Belum Memenuhi'}`],
+              // 🔴 Hapus tulisan WBBM/WBK, ubah menjadi bintang
+              ['Total Skor Akhir', `${scores.total.toFixed(2)} — ${scores.total >= 85 ? '⭐⭐' : scores.total >= 75 ? '⭐' : 'Belum Memenuhi'}`],
             ].map(([k, v]) => (
               <tr key={k}>
                 <td style={{ border: '1px solid #999', padding: '3px 8px', fontWeight: 'bold', width: '30%', background: '#f8f9fa' }}>{k}</td>
