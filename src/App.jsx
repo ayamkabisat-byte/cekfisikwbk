@@ -226,6 +226,15 @@ const initialData = [
 
 const POSITIVE_ANSWERS = ['Ada', 'Ya', 'Bersih', 'Layak', 'Baik', 'Elektronik'];
 
+// 🔴 TAMBAHKAN FUNGSI INI UNTUK SKALA 5 BINTANG
+const getPredicate = (score) => {
+  if (score >= 90) return 'Sangat Baik ⭐⭐⭐⭐⭐';
+  if (score >= 80) return 'Baik ⭐⭐⭐⭐';
+  if (score >= 70) return 'Cukup ⭐⭐⭐';
+  if (score >= 60) return 'Kurang ⭐⭐';
+  return 'Sangat Kurang ⭐';
+};
+
 export default function App() {
   const [satker, setSatker] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
@@ -241,26 +250,30 @@ export default function App() {
 
   // ── Init ──────────────────────────────────────────────────
   useEffect(() => {
+    // 🔴 Kembalikan judul Tab Browser
+    document.title = "Form Cek Fisik ZI WBK/WBBM 2026"; 
+    
     const saved = localStorage.getItem('theme');
     if (saved === 'dark') setIsDark(true);
 
-    // FIX: print portrait + ukuran A4
+    // FIX: print portrait + ukuran A4 + Paksa Warna Teks & Border Hitam Pekat
     const style = document.createElement('style');
     style.innerHTML = `
       @media print {
         @page { size: A4 portrait; margin: 12mm 10mm; }
         body { background: white !important; color: black !important; font-family: Arial, sans-serif; }
         .no-print { display: none !important; }
-        .print-only { display: block !important; }
-        .print-header-wrap { display: block !important; text-align: center; margin-bottom: 14px; border-bottom: 2px solid #1e3a6e; padding-bottom: 10px; }
+        .print-only { display: block !important; color: black !important; }
+        .print-only div, .print-only p, .print-only span, .print-only td, .print-only strong, .print-only em { color: black !important; }
+        .print-header-wrap { display: block !important; text-align: center; margin-bottom: 14px; border-bottom: 2px solid black !important; padding-bottom: 10px; }
         .print-header-img { max-height: 90px; display: block; margin: 0 auto 8px; }
-        table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 10px; }
-        th, td { border: 1px solid #555; padding: 4px 6px; text-align: left; vertical-align: top; }
-        th { background: #1e3a6e !important; color: white !important; font-size: 8pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        tr.aspek-row td { background: #dbeafe !important; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        tr.sub-row td { background: #f0f4ff !important; font-style: italic; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .ans-pos { color: #15803d !important; font-weight: 700; }
-        .ans-neg { color: #dc2626 !important; font-weight: 700; }
+        table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 10px; color: black !important; }
+        th, td { border: 1px solid black !important; padding: 4px 6px; text-align: left; vertical-align: top; }
+        th, th * { background: #1e3a6e !important; color: white !important; font-size: 8pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tr.aspek-row td { background: #dbeafe !important; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: black !important; }
+        tr.sub-row td { background: #f0f4ff !important; font-style: italic; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: black !important; }
+        td.ans-pos { color: #15803d !important; font-weight: 700; }
+        td.ans-neg { color: #dc2626 !important; font-weight: 700; }
         tr { page-break-inside: avoid; }
       }
       .print-only { display: none; }
@@ -442,19 +455,19 @@ export default function App() {
         </div>
 
         {/* Identitas */}
-        <table style={{ width: '100%', marginBottom: 10, fontSize: '9pt' }}>
+        <table style={{ width: '100%', marginBottom: 10, fontSize: '9pt', color: 'black' }}>
           <tbody>
             {[
               ['Unit Kerja / Satker', satker || '-'],
               ['Tanggal Penilaian', formatDate(tanggal)],
               ['Auditor / Penilai', auditor || '-'],
               ['Jabatan / NIP', jabatan || '-'],
-              // 🔴 Hapus tulisan WBBM/WBK, ubah menjadi bintang
-              ['Total Skor Akhir', `${scores.total.toFixed(2)} — ${scores.total >= 85 ? '⭐⭐' : scores.total >= 75 ? '⭐' : 'Belum Memenuhi'}`],
+              // 🔴 UBAH BAGIAN INI MENGGUNAKAN FUNGSI SKALA 5 BINTANG
+              ['Total Skor Akhir', `${scores.total.toFixed(2)} — ${getPredicate(scores.total)}`],
             ].map(([k, v]) => (
               <tr key={k}>
-                <td style={{ border: '1px solid #999', padding: '3px 8px', fontWeight: 'bold', width: '30%', background: '#f8f9fa' }}>{k}</td>
-                <td style={{ border: '1px solid #999', padding: '3px 8px' }}>{v}</td>
+                <td style={{ border: '1px solid black', padding: '3px 8px', fontWeight: 'bold', width: '30%', background: '#f8f9fa' }}>{k}</td>
+                <td style={{ border: '1px solid black', padding: '3px 8px' }}>{v}</td>
               </tr>
             ))}
           </tbody>
@@ -510,13 +523,13 @@ export default function App() {
         </table>
 
         {/* Tanda tangan */}
-        <div style={{ marginTop: 28, display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: 28, display: 'flex', justifyContent: 'flex-end', color: 'black' }}>
           <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: '9pt', margin: 0 }}>......................., ...................... 2026</p>
-            <p style={{ fontSize: '9pt', margin: '4px 0' }}>Tim Penilai / Auditor,</p>
+            <p style={{ fontSize: '9pt', margin: 0, color: 'black' }}>......................., ...................... 2026</p>
+            <p style={{ fontSize: '9pt', margin: '4px 0', color: 'black' }}>Tim Penilai / Auditor,</p>
             <div style={{ height: 55 }} />
-            <p style={{ fontSize: '9pt', borderTop: '1px solid #000', paddingTop: 3, minWidth: 180, margin: 0 }}>{auditor || '___________________________'}</p>
-            {jabatan && <p style={{ fontSize: '8pt', margin: '2px 0 0' }}>{jabatan}</p>}
+            <p style={{ fontSize: '9pt', borderTop: '1px solid black', paddingTop: 3, minWidth: 180, margin: 0, color: 'black' }}>{auditor || '___________________________'}</p>
+            {jabatan && <p style={{ fontSize: '8pt', margin: '2px 0 0', color: 'black' }}>{jabatan}</p>}
           </div>
         </div>
       </div>
