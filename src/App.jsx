@@ -333,7 +333,7 @@ export default function App() {
           <img src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'}
             alt="Header" style={{ maxHeight: 80, margin: '0 auto', display: 'block' }}
             onError={e => { e.target.style.display = 'none'; }} />
-          <h2 style={{ fontSize: 13, fontWeight: 'bold', margin: '6px 0' }}>FORM PENILAIAN CEK FISIK ATAS PEMBANGUNAN ZI WBK/WBBM TAHUN 2024</h2>
+          <h2 style={{ fontSize: 13, fontWeight: 'bold', margin: '6px 0' }}>FORM PENILAIAN CEK FISIK ATAS PEMBANGUNAN ZI WBK/WBBM TAHUN 2026</h2>
           <table style={{ width: '55%', margin: '6px auto', fontSize: 11, borderCollapse: 'collapse' }}>
             <tbody>
               {[['Unit Kerja', satker], ['Tanggal', tanggal ? new Date(tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-'], ['Auditor/Penilai', auditor], ['Jabatan', jabatan], ['Total Skor', scores.total.toFixed(4)]].map(([k, v]) => (
