@@ -442,16 +442,43 @@ export default function App() {
       // Hapus karakter emoji (bintang) agar tidak merusak jsPDF (Error invalid karakter font)
       const stripEmoji = (str) => (str || '').replace(/⭐/g, '').trim();
 
-      // Header
-      pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
-      pdf.text('KEMENTERIAN PENDIDIKAN, KEBUDAYAAN, RISET, DAN TEKNOLOGI', pageW / 2, 14, { align: 'center' });
-      pdf.setFontSize(13); pdf.text('FORM PENILAIAN CEK FISIK', pageW / 2, 21, { align: 'center' });
-      pdf.setFontSize(10); pdf.text('PEMBANGUNAN ZONA INTEGRITAS WBK/WBBM TAHUN 2026', pageW / 2, 27, { align: 'center' });
-      pdf.setDrawColor(0); pdf.setLineWidth(0.4); pdf.line(margin, 30, pageW - margin, 30);
+      let currentY = 10;
+
+      // Header Image (Logo)
+      const img = new Image();
+      img.src = '/Header Itjen Kemendikdasmen.png'; // Selalu gunakan versi terang untuk cetak PDF
+      await new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = () => {
+          console.warn("Gambar header gagal dimuat untuk PDF");
+          resolve(); // Resolve tetap dipanggil agar proses PDF tidak terhenti
+        };
+      });
+
+      if (img.width) {
+        const imgW = 150; // Lebar gambar disesuaikan
+        const imgH = (img.height * imgW) / img.width;
+        pdf.addImage(img, 'PNG', (pageW - imgW) / 2, currentY, imgW, imgH);
+        currentY += imgH + 8;
+      } else {
+        // Fallback jika logo gagal dimuat
+        pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
+        pdf.text('KEMENTERIAN PENDIDIKAN, KEBUDAYAAN, RISET, DAN TEKNOLOGI', pageW / 2, currentY + 4, { align: 'center' });
+        currentY += 10;
+      }
+
+      // Header Teks
+      pdf.setFontSize(13); pdf.setFont('helvetica', 'bold');
+      pdf.text('FORM PENILAIAN CEK FISIK', pageW / 2, currentY, { align: 'center' });
+      pdf.setFontSize(10); pdf.text('PEMBANGUNAN ZONA INTEGRITAS WBK/WBBM TAHUN 2026', pageW / 2, currentY + 6, { align: 'center' });
+      currentY += 10;
+      
+      pdf.setDrawColor(0); pdf.setLineWidth(0.4); pdf.line(margin, currentY, pageW - margin, currentY);
+      currentY += 3;
 
       // Identitas
       pdf.autoTable({
-        startY: 33, margin: { left: margin, right: margin },
+        startY: currentY, margin: { left: margin, right: margin },
         body: [
           ['Unit Kerja / Satker', satker || '-'],
           ['Tanggal Penilaian', formatDate(tanggal)],
@@ -468,11 +495,11 @@ export default function App() {
       data.forEach((cat, ci) => {
         tableBody.push([
           { content: String(ci + 1), styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } },
-          { content: `${cat.title}   |   Skor: ${(scores.categories[cat.id]?.current || 0).toFixed(3)}`, colSpan: 6, styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }
+          { content: `${cat.title}   |   Skor: ${(scores.categories[cat.id]?.current || 0).toFixed(3)}`, colSpan: 5, styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }
         ]);
         cat.subCategories.forEach((sub, si) => {
           if (sub.questions.length > 1) {
-            tableBody.push(['', '', { content: sub.title, colSpan: 5, styles: { fontStyle: 'italic', fillColor: [240, 244, 255] } }]);
+            tableBody.push(['', '', { content: sub.title, colSpan: 4, styles: { fontStyle: 'italic', fillColor: [240, 244, 255] } }]);
           }
           sub.questions.forEach((q, qi) => {
             const isPos = q.answer && POSITIVE_ANSWERS.includes(q.answer);
@@ -482,8 +509,7 @@ export default function App() {
               sub.questions.length === 1 ? sub.title : '',
               q.text,
               { content: q.answer || '-', styles: { textColor: q.answer ? (isPos ? [21, 128, 61] : [220, 38, 38]) : [100, 100, 100], fontStyle: q.answer ? 'bold' : 'normal' } },
-              q.note || '',
-              { content: q.weight.toFixed(3), styles: { halign: 'center' } }
+              q.note || ''
             ]);
           });
         });
@@ -491,19 +517,21 @@ export default function App() {
 
       // Validasi keberadaan pdf.lastAutoTable agar lebih aman pada react-vite
       pdf.autoTable({
-        startY: pdf.lastAutoTable ? pdf.lastAutoTable.finalY + 4 : 60,
+        startY: pdf.lastAutoTable ? pdf.lastAutoTable.finalY + 4 : currentY + 30,
         margin: { left: margin, right: margin },
         head: [[
           { content: 'No.', styles: { halign: 'center' } }, 'Aspek', 'Sub Aspek', 'Pertanyaan',
-          { content: 'Jawaban', styles: { halign: 'center' } }, 'Catatan',
-          { content: 'Bobot', styles: { halign: 'center' } }
+          { content: 'Jawaban', styles: { halign: 'center' } }, 'Catatan'
         ]],
         body: tableBody,
         headStyles: { fillColor: [30, 58, 110], textColor: 255, fontSize: 7.5, fontStyle: 'bold' },
         columnStyles: {
-          0: { cellWidth: 11, halign: 'center' }, 1: { cellWidth: 22 }, 2: { cellWidth: 28 },
-          3: { cellWidth: 68 }, 4: { cellWidth: 18, halign: 'center' }, 5: { cellWidth: 24 },
-          6: { cellWidth: 12, halign: 'center' }
+          0: { cellWidth: 11, halign: 'center' }, 
+          1: { cellWidth: 25 }, 
+          2: { cellWidth: 32 },
+          3: { cellWidth: 70 }, 
+          4: { cellWidth: 18, halign: 'center' }, 
+          5: { cellWidth: 34 }
         },
         styles: { fontSize: 7, cellPadding: 1.8, overflow: 'linebreak', valign: 'top' },
         theme: 'grid',
