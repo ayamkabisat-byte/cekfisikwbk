@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp,
-  FileSpreadsheet, Sun, Moon, MessageSquareText, Download, Menu, X, Send, RotateCcw
+  FileSpreadsheet, Sun, Moon, MessageSquareText, Download, Menu, X, Send, RotateCcw, Search
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// ============================================================
+// URL Google Apps Script — sudah fix, pakai URLSearchParams
+// ============================================================
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwQ29y8240MueaQ52NiWYJ3q495qsvjuhmVzgAHOsE4SABPcISIro1BfhYMJ2aquPKy/exec';
 
 const initialData = [
@@ -128,7 +131,7 @@ const initialData = [
       { id: 'pra-3a', title: 'a. Tata Usaha', questions: [{ id: '3a-1', text: 'Lemari arsip untuk menyimpan laporan keuangan.', weight: 0.555555555555556, options: ['Ada', 'Tidak Ada'], answer: null, note: '' }, { id: '3a-2', text: 'Mekanisme pengelolaan arsip yang jelas (arsip >5 tahun dipindahkan).', weight: 0.555555555555556, options: ['Ada', 'Tidak Ada'], answer: null, note: '' }, { id: '3a-3', text: 'Ruang diskusi staf', weight: 0.555555555555556, options: ['Ada', 'Tidak Ada'], answer: null, note: '' }] },
       { id: 'pra-3b', title: 'b. Pos Keamanan (Security)', questions: [{ id: '3b-1', text: 'Ketersediaan Pos Keamanan (Security)', weight: 1.666666666666667, options: ['Ada', 'Tidak Ada'], answer: null, note: '' }] },
       { id: 'pra-3c', title: 'c. Toilet', questions: [{ id: '3c-1', text: 'Tersedia Sabun', weight: 0.333333333333333, options: ['Ya', 'Tidak'], answer: null, note: '' }, { id: '3c-2', text: 'Tersedia Tisu', weight: 0.333333333333333, options: ['Ya', 'Tidak'], answer: null, note: '' }, { id: '3c-3', text: 'Tersedia Air', weight: 0.333333333333333, options: ['Ya', 'Tidak'], answer: null, note: '' }, { id: '3c-4', text: 'Kenyamanan (Tidak Bau, Pencahayaan Cukup, Sirkulasi Udara Baik, dan Privasi Terjaga)', weight: 0.333333333333333, options: ['Ya', 'Tidak'], answer: null, note: '' }, { id: '3c-5', text: 'Kebersihan', weight: 0.333333333333333, options: ['Bersih', 'Tidak Bersih'], answer: null, note: '' }] },
-     {
+      {
         id: 'pra-3d', title: 'd. Kontak Darurat',
         questions: [
           { id: '3d-1', text: 'RS/Puskesmas/Faskes', weight: 0.238095238095238, options: ['Ada', 'Tidak Ada'], answer: null, note: '' },
@@ -224,6 +227,7 @@ const initialData = [
 
 const POSITIVE_ANSWERS = ['Ada', 'Ya', 'Bersih', 'Layak', 'Baik', 'Elektronik'];
 
+// FIX: Selaraskan threshold predikat dengan GAS (75/85)
 const getPredicate = (score) => {
   if (score >= 90) return 'Sangat Baik ⭐⭐⭐⭐⭐';
   if (score >= 80) return 'Baik ⭐⭐⭐⭐';
@@ -244,6 +248,14 @@ export default function App() {
   const [isDark, setIsDark] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  // State untuk fitur Tarik Data
+  const [showPullModal, setShowPullModal] = useState(false);
+  const [pullKeyword, setPullKeyword] = useState('');
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullStatus, setPullStatus] = useState({ type: '', message: '' });
+  const [pullSessions, setPullSessions] = useState([]);
 
   useEffect(() => {
     document.title = "Form Cek Fisik ZI WBK/WBBM 2026";
@@ -295,6 +307,7 @@ export default function App() {
     setShowResetModal(false); setSubmitStatus({ type: '', message: '' });
   };
 
+  // FIX: Kirim pakai URLSearchParams agar GAS bisa baca via e.parameter.data
   const handleSubmit = async () => {
     if (!satker.trim()) {
       setSubmitStatus({ type: 'error', message: 'Nama Satker wajib diisi!' });
@@ -303,6 +316,7 @@ export default function App() {
     }
     setIsSubmitting(true);
     setSubmitStatus({ type: '', message: '' });
+
     const rows = [];
     data.forEach(cat => {
       cat.subCategories.forEach(sub => {
@@ -310,32 +324,101 @@ export default function App() {
           let skor = 0;
           if (q.answer === q.options[0]) skor = q.weight;
           else if (q.options.length === 3 && q.answer === q.options[1]) skor = q.weight / 2;
-          rows.push({ aspek: cat.title, subAspek: sub.title, pertanyaan: q.text, jawaban: q.answer || '', isAnswered: q.answer !== null, bobot: Number(q.weight.toFixed(4)), skor: Number(skor.toFixed(4)), catatan: q.note || '' });
+          rows.push({
+            aspek: cat.title, subAspek: sub.title, pertanyaan: q.text,
+            jawaban: q.answer || '', bobot: Number(q.weight.toFixed(4)),
+            skor: Number(skor.toFixed(4)), catatan: q.note || ''
+          });
         });
       });
     });
-    const payload = { identity: { satker, tanggal, auditor, jabatan }, rows, totalScore: Number(scores.total.toFixed(2)) };
+
+    const payload = {
+      identity: { satker, tanggal, auditor, jabatan },
+      rows,
+      totalScore: Number(scores.total.toFixed(2))
+    };
+
     try {
-      const response = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
+      // FIX: URLSearchParams — GAS baca via e.parameter.data
+      const params = new URLSearchParams();
+      params.append('data', JSON.stringify(payload));
+
+      const response = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
       const result = await response.json();
       if (result.status === 'success') {
-        setSubmitStatus({ type: 'success', message: `✅ Berhasil disimpan! | Skor Gabungan Tim: ${result.totalScore} | Predikat: ${result.predikat}` });
+        setSubmitStatus({ type: 'success', message: `✅ Berhasil! Sheet: "${result.sheetName}" | Skor: ${result.totalScore} | ${result.predikat}` });
       } else {
         setSubmitStatus({ type: 'error', message: '❌ GAS error: ' + (result.message || 'Unknown error') });
       }
     } catch (error) {
+      // Fallback no-cors jika fetch biasa di-block CORS
       try {
-        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
-        setSubmitStatus({ type: 'success', message: '✅ Data dikirim (mode fallback no-cors). Cek Google Sheets untuk konfirmasi.' });
+        const params2 = new URLSearchParams();
+        params2.append('data', JSON.stringify(payload));
+        await fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params2.toString(),
+        });
+        setSubmitStatus({ type: 'success', message: '✅ Data dikirim (mode fallback). Cek Google Sheets untuk konfirmasi.' });
       } catch {
-        setSubmitStatus({ type: 'error', message: '❌ Gagal terhubung ke server. Cek koneksi internet.' });
+        setSubmitStatus({ type: 'error', message: '❌ Gagal terhubung. Cek koneksi internet.' });
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const [isPrinting, setIsPrinting] = useState(false);
+  // Tarik Data dari Sheets berdasarkan keyword satker
+  const handlePullData = async () => {
+    if (!pullKeyword.trim()) { setPullStatus({ type: 'error', message: 'Masukkan nama satker.' }); return; }
+    setIsPulling(true); setPullStatus({ type: '', message: '' }); setPullSessions([]);
+    try {
+      const url = `${GAS_URL}?action=pull&keyword=${encodeURIComponent(pullKeyword.trim())}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.status === 'success' && json.sessions && json.sessions.length > 0) {
+        setPullSessions(json.sessions);
+        setPullStatus({ type: 'success', message: `Ditemukan ${json.sessions.length} sesi untuk "${pullKeyword}".` });
+      } else {
+        setPullStatus({ type: 'error', message: `Tidak ada data untuk "${pullKeyword}". Pastikan nama satker sesuai.` });
+      }
+    } catch {
+      setPullStatus({ type: 'error', message: 'Gagal terhubung ke server.' });
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  const handleLoadSession = (session) => {
+    const newData = JSON.parse(JSON.stringify(initialData));
+    session.rows.forEach(row => {
+      if (!row.jawaban || row.jawaban === '-') return;
+      newData.forEach(cat => {
+        cat.subCategories.forEach(sub => {
+          sub.questions.forEach(q => {
+            if (q.text === row.pertanyaan) {
+              q.answer = row.jawaban;
+              if (row.catatan && row.catatan !== '-') q.note = row.catatan;
+            }
+          });
+        });
+      });
+    });
+    setData(newData);
+    setSatker(session.satker || pullKeyword);
+    setShowPullModal(false);
+    setPullSessions([]); setPullKeyword(''); setPullStatus({ type: '', message: '' });
+    setSubmitStatus({ type: 'success', message: `✅ Data "${session.satker}" berhasil dimuat! Total skor sebelumnya: ${session.totalScore}` });
+  };
+
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
 
   const handleDownloadPDF = async () => {
     if (!progress.isComplete || isPrinting) return;
@@ -344,36 +427,74 @@ export default function App() {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageW = pdf.internal.pageSize.getWidth();
       const margin = 10;
+
+      // Header
       pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
       pdf.text('KEMENTERIAN PENDIDIKAN, KEBUDAYAAN, RISET, DAN TEKNOLOGI', pageW / 2, 14, { align: 'center' });
       pdf.setFontSize(13); pdf.text('FORM PENILAIAN CEK FISIK', pageW / 2, 21, { align: 'center' });
       pdf.setFontSize(10); pdf.text('PEMBANGUNAN ZONA INTEGRITAS WBK/WBBM TAHUN 2026', pageW / 2, 27, { align: 'center' });
       pdf.setDrawColor(0); pdf.setLineWidth(0.4); pdf.line(margin, 30, pageW - margin, 30);
+
+      // Identitas
       autoTable(pdf, {
         startY: 33, margin: { left: margin, right: margin },
-        body: [['Unit Kerja / Satker', satker || '-'], ['Tanggal Penilaian', formatDate(tanggal)], ['Auditor / Penilai', auditor || '-'], ['Jabatan / NIP', jabatan || '-'], ['Total Skor Akhir', `${scores.total.toFixed(2)} — ${getPredicate(scores.total)}`]],
+        body: [
+          ['Unit Kerja / Satker', satker || '-'],
+          ['Tanggal Penilaian', formatDate(tanggal)],
+          ['Auditor / Penilai', auditor || '-'],
+          ['Jabatan / NIP', jabatan || '-'],
+          ['Total Skor Akhir', `${scores.total.toFixed(2)} — ${getPredicate(scores.total)}`],
+        ],
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52, fillColor: [248, 249, 250] } },
         styles: { fontSize: 8.5, cellPadding: 2 }, theme: 'grid',
       });
+
+      // Tabel matriks
       const tableBody = [];
       data.forEach((cat, ci) => {
-        tableBody.push([{ content: String(ci + 1), styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }, { content: `${cat.title}   |   Skor: ${(scores.categories[cat.id]?.current || 0).toFixed(3)}`, colSpan: 6, styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }]);
+        tableBody.push([
+          { content: String(ci + 1), styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } },
+          { content: `${cat.title}   |   Skor: ${(scores.categories[cat.id]?.current || 0).toFixed(3)}`, colSpan: 6, styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }
+        ]);
         cat.subCategories.forEach((sub, si) => {
-          if (sub.questions.length > 1) tableBody.push(['', '', { content: sub.title, colSpan: 5, styles: { fontStyle: 'italic', fillColor: [240, 244, 255] } }]);
+          if (sub.questions.length > 1) {
+            tableBody.push(['', '', { content: sub.title, colSpan: 5, styles: { fontStyle: 'italic', fillColor: [240, 244, 255] } }]);
+          }
           sub.questions.forEach((q, qi) => {
             const isPos = q.answer && POSITIVE_ANSWERS.includes(q.answer);
-            tableBody.push([`${ci + 1}.${String.fromCharCode(97 + si)}.${qi + 1}`, '', sub.questions.length === 1 ? sub.title : '', q.text, { content: q.answer || '-', styles: { textColor: q.answer ? (isPos ? [21, 128, 61] : [220, 38, 38]) : [100, 100, 100], fontStyle: q.answer ? 'bold' : 'normal' } }, q.note || '', { content: q.weight.toFixed(3), styles: { halign: 'center' } }]);
+            tableBody.push([
+              `${ci + 1}.${String.fromCharCode(97 + si)}.${qi + 1}`,
+              '',
+              sub.questions.length === 1 ? sub.title : '',
+              q.text,
+              { content: q.answer || '-', styles: { textColor: q.answer ? (isPos ? [21, 128, 61] : [220, 38, 38]) : [100, 100, 100], fontStyle: q.answer ? 'bold' : 'normal' } },
+              q.note || '',
+              { content: q.weight.toFixed(3), styles: { halign: 'center' } }
+            ]);
           });
         });
       });
+
       autoTable(pdf, {
-        startY: pdf.lastAutoTable.finalY + 4, margin: { left: margin, right: margin },
-        head: [[{ content: 'No.', styles: { halign: 'center' } }, 'Aspek', 'Sub Aspek', 'Pertanyaan', { content: 'Jawaban', styles: { halign: 'center' } }, 'Catatan', { content: 'Bobot', styles: { halign: 'center' } }]],
+        startY: pdf.lastAutoTable.finalY + 4,
+        margin: { left: margin, right: margin },
+        head: [[
+          { content: 'No.', styles: { halign: 'center' } }, 'Aspek', 'Sub Aspek', 'Pertanyaan',
+          { content: 'Jawaban', styles: { halign: 'center' } }, 'Catatan',
+          { content: 'Bobot', styles: { halign: 'center' } }
+        ]],
         body: tableBody,
         headStyles: { fillColor: [30, 58, 110], textColor: 255, fontSize: 7.5, fontStyle: 'bold' },
-        columnStyles: { 0: { cellWidth: 11, halign: 'center' }, 1: { cellWidth: 22 }, 2: { cellWidth: 28 }, 3: { cellWidth: 68 }, 4: { cellWidth: 18, halign: 'center' }, 5: { cellWidth: 24 }, 6: { cellWidth: 12, halign: 'center' } },
-        styles: { fontSize: 7, cellPadding: 1.8, overflow: 'linebreak', valign: 'top' }, theme: 'grid',
+        columnStyles: {
+          0: { cellWidth: 11, halign: 'center' }, 1: { cellWidth: 22 }, 2: { cellWidth: 28 },
+          3: { cellWidth: 68 }, 4: { cellWidth: 18, halign: 'center' }, 5: { cellWidth: 24 },
+          6: { cellWidth: 12, halign: 'center' }
+        },
+        styles: { fontSize: 7, cellPadding: 1.8, overflow: 'linebreak', valign: 'top' },
+        theme: 'grid',
       });
+
+      // Tanda tangan
       const finalY = pdf.lastAutoTable.finalY + 12;
       const sigCX = pageW - margin - 30;
       pdf.setFontSize(8.5); pdf.setFont('helvetica', 'normal');
@@ -383,6 +504,7 @@ export default function App() {
       pdf.setFont('helvetica', 'bold');
       pdf.text(auditor || '___________________________', sigCX, finalY + 27, { align: 'center' });
       if (jabatan) { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.text(jabatan, sigCX, finalY + 32, { align: 'center' }); }
+
       pdf.save(`CekFisik_${satker.replace(/[^\w]/g, '_')}_${tanggal}.pdf`);
     } catch (err) {
       console.error('PDF error:', err);
@@ -393,11 +515,12 @@ export default function App() {
   };
 
   const dk = isDark;
-  const formatDate = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
 
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${dk ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-800'}`}>
       <div className="flex flex-col md:flex-row min-h-screen">
+
+        {/* SIDEBAR */}
         <div className={`fixed inset-y-0 left-0 z-40 w-64 shadow-xl transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 ${dk ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-200'}`}>
           <div className={`p-4 flex justify-between items-center border-b ${dk ? 'border-gray-700' : 'border-gray-200'}`}>
             <h2 className={`font-bold text-sm ${dk ? 'text-blue-400' : 'text-blue-600'}`}>Progress Isian</h2>
@@ -438,12 +561,15 @@ export default function App() {
         </div>
         {isSidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
 
+        {/* MAIN */}
         <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+          {/* Header image */}
           <div className={`w-full border-b flex justify-center items-center py-4 relative ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <button className="md:hidden absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gray-100 dark:bg-gray-700" onClick={() => setIsSidebarOpen(true)}><Menu size={22} /></button>
-            <img src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'} alt="Header Itjen Kemendikdasmen" className="h-16 md:h-24 object-contain px-4 max-w-full" onError={e => { e.target.style.display = 'none'; }} />
+            <img src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'} alt="Header" className="h-16 md:h-24 object-contain px-4 max-w-full" onError={e => { e.target.style.display = 'none'; }} />
           </div>
 
+          {/* Sticky header */}
           <header className={`sticky top-0 z-20 shadow-md ${dk ? 'bg-blue-950 text-white' : 'bg-blue-700 text-white'}`}>
             <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center gap-3">
               <div className="flex-1 min-w-0">
@@ -473,6 +599,8 @@ export default function App() {
                 <p>{submitStatus.message}</p>
               </div>
             )}
+
+            {/* Identity */}
             <div className={`p-5 rounded-2xl border shadow-sm ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
               <h2 className={`text-sm font-bold mb-4 flex items-center gap-2 ${dk ? 'text-blue-400' : 'text-blue-600'}`}><FileSpreadsheet size={16} /> Identitas Penilaian</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -495,6 +623,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Aspek Cards */}
             {data.map((cat, ci) => (
               <div key={cat.id} id={cat.id} className={`rounded-2xl border overflow-hidden shadow-sm ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
                 <button onClick={() => setExpandedCats(p => ({ ...p, [cat.id]: !p[cat.id] }))}
@@ -554,9 +683,13 @@ export default function App() {
             )}
           </main>
 
+          {/* BOTTOM ACTION BAR */}
           <div className={`fixed bottom-0 left-0 right-0 md:left-64 z-30 border-t px-4 py-3 flex flex-wrap gap-2 shadow-2xl ${dk ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}`}>
             <button onClick={() => setShowResetModal(true)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${dk ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
               <RotateCcw size={14} /> Reset
+            </button>
+            <button onClick={() => setShowPullModal(true)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${dk ? 'border-purple-700 text-purple-400 hover:bg-purple-900/20' : 'border-purple-200 text-purple-600 hover:bg-purple-50'}`}>
+              <Search size={14} /> Tarik Data
             </button>
             <button onClick={handleSubmit} disabled={isSubmitting || !satker.trim()} className="flex items-center gap-1.5 flex-1 md:flex-none justify-center px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all">
               {isSubmitting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={14} />}
@@ -577,6 +710,7 @@ export default function App() {
         </div>
       </div>
 
+      {/* MODAL RESET */}
       {showResetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className={`rounded-2xl p-6 max-w-sm w-full shadow-2xl ${dk ? 'bg-gray-800' : 'bg-white'}`}>
@@ -586,6 +720,60 @@ export default function App() {
               <button onClick={() => setShowResetModal(false)} className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold ${dk ? 'border-gray-600 text-gray-300' : 'border-gray-200 text-gray-600'}`}>Batal</button>
               <button onClick={handleReset} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold">Ya, Reset</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TARIK DATA */}
+      {showPullModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-lg shadow-2xl ${dk ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-800'}`}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-base">📥 Tarik Data dari Google Sheets</h3>
+              <button onClick={() => { setShowPullModal(false); setPullSessions([]); setPullStatus({ type: '', message: '' }); }} className={`p-1.5 rounded-lg ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}><X size={18} /></button>
+            </div>
+            <p className={`text-xs mb-4 leading-relaxed ${dk ? 'text-gray-400' : 'text-gray-500'}`}>
+              Cari data yang sudah tersimpan di Sheets berdasarkan nama satker. Cocok untuk menggabungkan isian dari beberapa anggota tim.
+            </p>
+            <div className="flex gap-2 mb-3">
+              <input type="text" placeholder="Ketik nama satker..." value={pullKeyword} onChange={e => setPullKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handlePullData()}
+                className={`flex-1 p-3 border rounded-xl outline-none text-sm ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-purple-400' : 'bg-white border-gray-200 focus:border-purple-500'}`} />
+              <button onClick={handlePullData} disabled={isPulling || !pullKeyword.trim()}
+                className="px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm disabled:opacity-50 flex items-center gap-2">
+                {isPulling ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search size={16} />}
+                {isPulling ? '...' : 'Cari'}
+              </button>
+            </div>
+            {pullStatus.message && (
+              <div className={`p-3 rounded-xl text-xs mb-3 ${pullStatus.type === 'success' ? (dk ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-800') : (dk ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-800')}`}>
+                {pullStatus.message}
+              </div>
+            )}
+            {pullSessions.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${dk ? 'text-gray-500' : 'text-gray-400'}`}>Pilih sesi untuk dimuat:</p>
+                {pullSessions.map((session, idx) => (
+                  <div key={idx} onClick={() => handleLoadSession(session)}
+                    className={`p-3 rounded-xl border cursor-pointer hover:border-purple-400 transition-all ${dk ? 'border-gray-600 bg-gray-700/50 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-purple-50'}`}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-sm">{session.satker}</p>
+                        <p className={`text-[10px] mt-0.5 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>
+                          {session.timestamp} · {session.rows?.length || 0} pertanyaan · Skor: {session.totalScore}
+                        </p>
+                        {session.auditor && session.auditor !== '-' && (
+                          <p className={`text-[10px] ${dk ? 'text-gray-500' : 'text-gray-400'}`}>Oleh: {session.auditor}</p>
+                        )}
+                      </div>
+                      <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 px-2 py-1 rounded-full font-bold flex-shrink-0 ml-2">Muat</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className={`text-[10px] mt-4 leading-relaxed ${dk ? 'text-gray-500' : 'text-gray-400'}`}>
+              💡 Tip: Setiap anggota tim bisa kirim bagiannya ke Sheets. Koordinator tarik semua data di sini, lalu download PDF laporan lengkap.
+            </p>
           </div>
         </div>
       )}
