@@ -3,8 +3,6 @@ import {
   CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp,
   FileSpreadsheet, Sun, Moon, MessageSquareText, Download, Menu, X, Send, RotateCcw, Search
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 // ============================================================
 // URL Google Apps Script — sudah fix, pakai URLSearchParams
@@ -424,9 +422,25 @@ export default function App() {
     if (!progress.isComplete || isPrinting) return;
     setIsPrinting(true);
     try {
+      const loadScript = (src) => new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) return resolve();
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+
+      const jsPDF = window.jspdf.jsPDF;
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageW = pdf.internal.pageSize.getWidth();
       const margin = 10;
+      
+      // Hapus karakter emoji (bintang) agar tidak merusak jsPDF (Error invalid karakter font)
+      const stripEmoji = (str) => (str || '').replace(/⭐/g, '').trim();
 
       // Header
       pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
@@ -436,14 +450,14 @@ export default function App() {
       pdf.setDrawColor(0); pdf.setLineWidth(0.4); pdf.line(margin, 30, pageW - margin, 30);
 
       // Identitas
-      autoTable(pdf, {
+      pdf.autoTable({
         startY: 33, margin: { left: margin, right: margin },
         body: [
           ['Unit Kerja / Satker', satker || '-'],
           ['Tanggal Penilaian', formatDate(tanggal)],
           ['Auditor / Penilai', auditor || '-'],
           ['Jabatan / NIP', jabatan || '-'],
-          ['Total Skor Akhir', `${scores.total.toFixed(2)} — ${getPredicate(scores.total)}`],
+          ['Total Skor Akhir', `${scores.total.toFixed(2)} — ${stripEmoji(getPredicate(scores.total))}`],
         ],
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52, fillColor: [248, 249, 250] } },
         styles: { fontSize: 8.5, cellPadding: 2 }, theme: 'grid',
@@ -475,8 +489,9 @@ export default function App() {
         });
       });
 
-      autoTable(pdf, {
-        startY: pdf.lastAutoTable.finalY + 4,
+      // Validasi keberadaan pdf.lastAutoTable agar lebih aman pada react-vite
+      pdf.autoTable({
+        startY: pdf.lastAutoTable ? pdf.lastAutoTable.finalY + 4 : 60,
         margin: { left: margin, right: margin },
         head: [[
           { content: 'No.', styles: { halign: 'center' } }, 'Aspek', 'Sub Aspek', 'Pertanyaan',
@@ -495,7 +510,15 @@ export default function App() {
       });
 
       // Tanda tangan
-      const finalY = pdf.lastAutoTable.finalY + 12;
+      let finalY = (pdf.lastAutoTable ? pdf.lastAutoTable.finalY : 100) + 12;
+      const pageH = pdf.internal.pageSize.getHeight();
+      
+      // Jika bagian tanda tangan menyentuh batas bawah kertas, buat page baru
+      if (finalY + 35 > pageH) {
+        pdf.addPage();
+        finalY = 20;
+      }
+
       const sigCX = pageW - margin - 30;
       pdf.setFontSize(8.5); pdf.setFont('helvetica', 'normal');
       pdf.text('......................., ...................... 2026', sigCX, finalY, { align: 'center' });
@@ -503,12 +526,16 @@ export default function App() {
       pdf.line(sigCX - 30, finalY + 22, sigCX + 30, finalY + 22);
       pdf.setFont('helvetica', 'bold');
       pdf.text(auditor || '___________________________', sigCX, finalY + 27, { align: 'center' });
-      if (jabatan) { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.text(jabatan, sigCX, finalY + 32, { align: 'center' }); }
+      if (jabatan) { 
+        pdf.setFont('helvetica', 'normal'); 
+        pdf.setFontSize(7.5); 
+        pdf.text(jabatan, sigCX, finalY + 32, { align: 'center' }); 
+      }
 
       pdf.save(`CekFisik_${satker.replace(/[^\w]/g, '_')}_${tanggal}.pdf`);
     } catch (err) {
       console.error('PDF error:', err);
-      setSubmitStatus({ type: 'error', message: '❌ Gagal membuat PDF. Coba lagi.' });
+      setSubmitStatus({ type: 'error', message: '❌ Gagal membuat PDF: ' + err.message });
     } finally {
       setIsPrinting(false);
     }
