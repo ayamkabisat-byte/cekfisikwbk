@@ -527,38 +527,15 @@ export default function App() {
         headStyles: { fillColor: [30, 58, 110], textColor: 255, fontSize: 7.5, fontStyle: 'bold' },
         columnStyles: {
           0: { cellWidth: 11, halign: 'center' }, 
-          1: { cellWidth: 25 }, 
-          2: { cellWidth: 32 },
+          1: { cellWidth: 20 }, 
+          2: { cellWidth: 25 },
           3: { cellWidth: 70 }, 
           4: { cellWidth: 18, halign: 'center' }, 
-          5: { cellWidth: 34 }
+          5: { cellWidth: 46 }
         },
         styles: { fontSize: 7, cellPadding: 1.8, overflow: 'linebreak', valign: 'top' },
         theme: 'grid',
       });
-
-      // Tanda tangan
-      let finalY = (pdf.lastAutoTable ? pdf.lastAutoTable.finalY : 100) + 12;
-      const pageH = pdf.internal.pageSize.getHeight();
-      
-      // Jika bagian tanda tangan menyentuh batas bawah kertas, buat page baru
-      if (finalY + 35 > pageH) {
-        pdf.addPage();
-        finalY = 20;
-      }
-
-      const sigCX = pageW - margin - 30;
-      pdf.setFontSize(8.5); pdf.setFont('helvetica', 'normal');
-      pdf.text('......................., ...................... 2026', sigCX, finalY, { align: 'center' });
-      pdf.text('Tim Penilai / Auditor,', sigCX, finalY + 6, { align: 'center' });
-      pdf.line(sigCX - 30, finalY + 22, sigCX + 30, finalY + 22);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(auditor || '___________________________', sigCX, finalY + 27, { align: 'center' });
-      if (jabatan) { 
-        pdf.setFont('helvetica', 'normal'); 
-        pdf.setFontSize(7.5); 
-        pdf.text(jabatan, sigCX, finalY + 32, { align: 'center' }); 
-      }
 
       pdf.save(`CekFisik_${satker.replace(/[^\w]/g, '_')}_${tanggal}.pdf`);
     } catch (err) {
