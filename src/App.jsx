@@ -553,13 +553,19 @@ export default function App() {
       <div className="flex flex-col md:flex-row min-h-screen">
 
         {/* SIDEBAR */}
-        <div className={`fixed inset-y-0 left-0 z-40 w-64 shadow-xl transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 ${dk ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-200'}`}>
+        <div className={`fixed inset-y-0 left-0 z-40 w-64 shadow-xl transform transition-all duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 ${dk ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-200'}`}>
           <div className={`p-4 flex justify-between items-center border-b ${dk ? 'border-gray-700' : 'border-gray-200'}`}>
             <h2 className={`font-bold text-sm ${dk ? 'text-blue-400' : 'text-blue-600'}`}>Progress Isian</h2>
-            <button className="md:hidden p-1 rounded" onClick={() => setIsSidebarOpen(false)}><X size={18} /></button>
+            <button 
+              className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" 
+              onClick={() => setIsSidebarOpen(false)}
+              aria-label="Tutup sidebar"
+            >
+              <X size={18} />
+            </button>
           </div>
           <div className="p-3 overflow-y-auto h-full pb-28 space-y-3">
-            <div className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-medium ${dk ? 'bg-gray-700' : 'bg-gray-50'}`}>
+            <div className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-medium transition-all ${dk ? 'bg-gray-700' : 'bg-gray-50'}`}>
               {satker.trim() ? <CheckCircle size={15} className="text-green-500 shrink-0" /> : <AlertCircle size={15} className="text-orange-500 shrink-0" />}
               <span className={satker.trim() ? (dk ? 'text-green-400' : 'text-green-700') : 'text-orange-500'}>
                 {satker.trim() ? `Satker: ${satker.substring(0, 20)}${satker.length > 20 ? '…' : ''}` : 'Nama Satker belum diisi'}
@@ -572,50 +578,65 @@ export default function App() {
               const pct = stat.total > 0 ? Math.round(stat.answered / stat.total * 100) : 0;
               return (
                 <div key={cat.id} onClick={() => scrollToCat(cat.id)}
-                  className={`cursor-pointer p-2.5 rounded-xl border transition-all ${isDone ? (dk ? 'bg-green-900/20 border-green-800/50' : 'bg-green-50 border-green-200') : stat.answered > 0 ? (dk ? 'bg-blue-900/20 border-blue-800/30 hover:bg-blue-900/30' : 'bg-blue-50/70 border-blue-100 hover:bg-blue-100') : (dk ? 'border-gray-700 hover:bg-gray-700/40' : 'border-gray-100 hover:bg-gray-50')}`}>
+                  className={`cursor-pointer p-2.5 rounded-xl border transition-all duration-200 hover:scale-[1.01] ${isDone ? (dk ? 'bg-green-900/20 border-green-800/50 hover:bg-green-900/30' : 'bg-green-50 border-green-200 hover:bg-green-100') : stat.answered > 0 ? (dk ? 'bg-blue-900/20 border-blue-800/30 hover:bg-blue-900/30' : 'bg-blue-50/70 border-blue-100 hover:bg-blue-100') : (dk ? 'border-gray-700 hover:bg-gray-700/40' : 'border-gray-100 hover:bg-gray-50')} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && scrollToCat(cat.id)}
+                  aria-label={`Navigasi ke ${cat.title}`}
+                >
                   <div className="flex justify-between items-start gap-1 mb-1.5">
                     <span className={`text-xs font-semibold leading-tight line-clamp-2 ${isDone ? (dk ? 'text-green-400' : 'text-green-700') : (dk ? 'text-gray-200' : 'text-gray-700')}`}>{idx + 1}. {cat.title.replace(/^\d+\.\s*/, '')}</span>
                     {isDone ? <CheckCircle size={13} className="text-green-500 shrink-0 mt-0.5" /> : <span className={`text-[9px] shrink-0 px-1.5 py-0.5 rounded-full font-bold ${stat.answered > 0 ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>{stat.total - stat.answered} sisa</span>}
                   </div>
                   <div className={`w-full h-1.5 rounded-full ${dk ? 'bg-gray-600' : 'bg-gray-200'}`}>
-                    <div className={`h-full rounded-full transition-all duration-300 ${isDone ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                    <div className={`h-full rounded-full transition-all duration-500 ${isDone ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
                   </div>
                   <div className={`text-right text-[9px] mt-0.5 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>{stat.answered}/{stat.total}</div>
                 </div>
               );
             })}
-            <div className={`p-3 rounded-xl text-center border ${dk ? 'bg-blue-900/30 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
+            <div className={`p-3 rounded-xl text-center border transition-all ${dk ? 'bg-blue-900/30 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
               <p className={`text-[10px] ${dk ? 'text-blue-300' : 'text-blue-600'}`}>Total Skor</p>
               <p className={`text-2xl font-extrabold leading-none ${dk ? 'text-yellow-400' : 'text-blue-800'}`}>{scores.total.toFixed(2)}</p>
               <p className={`text-[10px] mt-0.5 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>{progress.answered}/{progress.total} terjawab</p>
             </div>
           </div>
         </div>
-        {isSidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
+        {isSidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden transition-opacity duration-300" onClick={() => setIsSidebarOpen(false)} />}
 
         {/* MAIN */}
         <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
           {/* Header image */}
-          <div className={`w-full border-b flex justify-center items-center py-4 relative ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-            <button className="md:hidden absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gray-100 dark:bg-gray-700" onClick={() => setIsSidebarOpen(true)}><Menu size={22} /></button>
-            <img src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'} alt="Header" className="h-16 md:h-24 object-contain px-4 max-w-full" onError={e => { e.target.style.display = 'none'; }} />
+          <div className={`w-full border-b flex justify-center items-center py-4 relative transition-colors ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <button 
+              className="md:hidden absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" 
+              onClick={() => setIsSidebarOpen(true)}
+              aria-label="Buka sidebar"
+            >
+              <Menu size={22} />
+            </button>
+            <img src={isDark ? '/Header Itjen Kemendikdasmen Dark.png' : '/Header Itjen Kemendikdasmen.png'} alt="Header" className="h-16 md:h-24 object-contain px-4 max-w-full transition-opacity duration-200" onError={e => { e.target.style.display = 'none'; }} />
           </div>
 
           {/* Sticky header */}
-          <header className={`sticky top-0 z-20 shadow-md ${dk ? 'bg-blue-950 text-white' : 'bg-blue-700 text-white'}`}>
+          <header className={`sticky top-0 z-20 shadow-md transition-colors ${dk ? 'bg-blue-950 text-white' : 'bg-blue-700 text-white'}`}>
             <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center gap-3">
               <div className="flex-1 min-w-0">
                 <h1 className="text-sm md:text-base font-bold leading-tight">Form Cek Fisik Pembangunan ZI WBK/WBBM</h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <p className="text-xs text-blue-200">Tahun 2026</p>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${progress.isComplete ? 'bg-green-500 text-white' : 'bg-blue-800 text-blue-200'}`}>{progress.answered}/{progress.total} Terjawab</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors ${progress.isComplete ? 'bg-green-500 text-white' : 'bg-blue-800 text-blue-200'}`}>{progress.answered}/{progress.total} Terjawab</span>
                 </div>
               </div>
-              <div className={`px-3 py-1.5 rounded-xl text-right ${dk ? 'bg-blue-900' : 'bg-blue-800'}`}>
+              <div className={`px-3 py-1.5 rounded-xl text-right transition-all ${dk ? 'bg-blue-900' : 'bg-blue-800'}`}>
                 <span className="text-[10px] block text-blue-300">Total Skor</span>
                 <span className="text-xl font-extrabold text-yellow-300">{scores.total.toFixed(2)}</span>
               </div>
-              <button onClick={() => setIsDark(!isDark)} className={`p-2 rounded-full flex-shrink-0 transition-colors ${dk ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' : 'bg-blue-600 text-yellow-200 hover:bg-blue-500'}`}>
+              <button 
+                onClick={() => setIsDark(!isDark)} 
+                className={`p-2 rounded-full flex-shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 ${dk ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700 hover:scale-110' : 'bg-blue-600 text-yellow-200 hover:bg-blue-500 hover:scale-110'}`}
+                aria-label={dk ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
+              >
                 {dk ? <Sun size={18} /> : <Moon size={18} />}
               </button>
             </div>
@@ -626,88 +647,111 @@ export default function App() {
 
           <main className="max-w-4xl w-full mx-auto p-4 space-y-5 pb-28">
             {submitStatus.message && (
-              <div className={`p-4 rounded-xl flex items-start gap-3 border text-sm font-medium ${submitStatus.type === 'success' ? (dk ? 'bg-green-900/30 text-green-300 border-green-800' : 'bg-green-50 text-green-800 border-green-200') : (dk ? 'bg-red-900/30 text-red-300 border-red-800' : 'bg-red-50 text-red-800 border-red-200')}`}>
+              <div 
+                className={`p-4 rounded-xl flex items-start gap-3 border text-sm font-medium transition-all ${submitStatus.type === 'success' ? (dk ? 'bg-green-900/30 text-green-300 border-green-800' : 'bg-green-50 text-green-800 border-green-200') : (dk ? 'bg-red-900/30 text-red-300 border-red-800' : 'bg-red-50 text-red-800 border-red-200')}`}
+                role="status"
+                aria-live="polite"
+              >
                 {submitStatus.type === 'success' ? <CheckCircle size={18} className="shrink-0 mt-0.5" /> : <AlertCircle size={18} className="shrink-0 mt-0.5" />}
                 <p>{submitStatus.message}</p>
               </div>
             )}
 
             {/* Identity */}
-            <div className={`p-5 rounded-2xl border shadow-sm ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className={`p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
               <h2 className={`text-sm font-bold mb-4 flex items-center gap-2 ${dk ? 'text-blue-400' : 'text-blue-600'}`}><FileSpreadsheet size={16} /> Identitas Penilaian</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
                   <label className={`block text-xs font-semibold mb-1 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Nama Satker / Unit Kerja <span className="text-red-500">*</span></label>
-                  <input type="text" value={satker} onChange={e => setSatker(e.target.value)} placeholder="mis. BPMP Provinsi Jambi" className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
+                  <input type="text" value={satker} onChange={e => setSatker(e.target.value)} placeholder="mis. BPMP Provinsi Jambi" className={`w-full p-3 border rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-blue-500/50 ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
                 </div>
                 <div>
                   <label className={`block text-xs font-semibold mb-1 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Tanggal Penilaian</label>
-                  <input type="date" value={tanggal} onChange={e => setTanggal(e.target.value)} className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
+                  <input type="date" value={tanggal} onChange={e => setTanggal(e.target.value)} className={`w-full p-3 border rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-blue-500/50 ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
                 </div>
                 <div>
                   <label className={`block text-xs font-semibold mb-1 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Nama Auditor / Penilai</label>
-                  <input type="text" value={auditor} onChange={e => setAuditor(e.target.value)} placeholder="Nama lengkap" className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
+                  <input type="text" value={auditor} onChange={e => setAuditor(e.target.value)} placeholder="Nama lengkap" className={`w-full p-3 border rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-blue-500/50 ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
                 </div>
                 <div className="sm:col-span-2">
                   <label className={`block text-xs font-semibold mb-1 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Jabatan / NIP Penilai</label>
-                  <input type="text" value={jabatan} onChange={e => setJabatan(e.target.value)} placeholder="Jabatan atau NIP" className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
+                  <input type="text" value={jabatan} onChange={e => setJabatan(e.target.value)} placeholder="Jabatan atau NIP" className={`w-full p-3 border rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-blue-500/50 ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400' : 'bg-white border-gray-200 focus:border-blue-500'}`} />
                 </div>
               </div>
             </div>
 
             {/* Aspek Cards */}
             {data.map((cat, ci) => (
-              <div key={cat.id} id={cat.id} className={`rounded-2xl border overflow-hidden shadow-sm ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-                <button onClick={() => setExpandedCats(p => ({ ...p, [cat.id]: !p[cat.id] }))}
-                  className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-colors ${dk ? 'bg-blue-900/60 hover:bg-blue-900/80' : 'bg-blue-700 hover:bg-blue-800'} text-white`}>
+              <div key={cat.id} id={cat.id} className={`rounded-2xl border overflow-hidden shadow-sm transition-all hover:shadow-md ${dk ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                <button 
+                  onClick={() => setExpandedCats(p => ({ ...p, [cat.id]: !p[cat.id] }))}
+                  className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-yellow-400 ${dk ? 'bg-blue-900/60 hover:bg-blue-900/80' : 'bg-blue-700 hover:bg-blue-800'} text-white`}
+                  aria-expanded={expandedCats[cat.id]}
+                  aria-controls={`content-${cat.id}`}
+                >
                   <span className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-extrabold flex-shrink-0">{ci + 1}</span>
                   <span className="flex-1 font-bold text-sm md:text-base leading-tight">{cat.title.replace(/^\d+\.\s*/, '')}</span>
                   <span className="text-xs bg-white/20 px-2 py-1 rounded-full font-bold">{(scores.categories[cat.id]?.current || 0).toFixed(2)} pts</span>
                   {(() => { const s = categoryProgress[cat.id]; return s.answered === s.total ? <CheckCircle size={17} className="text-green-400 flex-shrink-0" /> : <span className="text-xs bg-orange-500/30 text-orange-200 px-2 py-0.5 rounded-full flex-shrink-0">{s.total - s.answered} sisa</span>; })()}
                   {expandedCats[cat.id] ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
                 </button>
-                {expandedCats[cat.id] && cat.subCategories.map((sub, si) => (
-                  <div key={sub.id} className={`border-b last:border-b-0 ${dk ? 'border-gray-700' : 'border-gray-100'}`}>
-                    <div className={`flex items-start gap-3 px-5 py-2.5 ${dk ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                      <span className="w-6 h-6 rounded-md bg-amber-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">{String.fromCharCode(97 + si)}</span>
-                      <span className={`text-sm font-semibold flex-1 leading-snug ${dk ? 'text-gray-200' : 'text-gray-700'}`}>{sub.title.replace(/^[a-z]\.\s*/i, '')}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${sub.questions.every(q => q.answer !== null) ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : `${dk ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'}`}`}>{sub.questions.filter(q => q.answer !== null).length}/{sub.questions.length}</span>
-                    </div>
-                    {sub.questions.map(q => {
-                      const answered = q.answer !== null;
-                      return (
-                        <div key={q.id} className={`px-5 py-3 border-b last:border-b-0 transition-colors ${answered ? (dk ? 'bg-green-900/10' : 'bg-green-50/50') : ''} ${dk ? 'border-gray-700/50' : 'border-gray-100'}`}>
-                          <p className={`text-sm mb-2.5 leading-relaxed ${dk ? 'text-gray-300' : 'text-gray-700'}`}>{q.text}</p>
-                          <div className="flex flex-wrap gap-2 mb-2.5">
-                            {q.options.map(opt => {
-                              const isSel = q.answer === opt;
-                              const isPos = POSITIVE_ANSWERS.includes(opt);
-                              const isPar = q.options.length === 3 && opt === q.options[1];
-                              let cls = 'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ';
-                              if (isSel) cls += isPos ? 'bg-green-500 border-green-500 text-white' : isPar ? 'bg-amber-500 border-amber-500 text-white' : 'bg-red-500 border-red-500 text-white';
-                              else cls += dk ? 'bg-gray-700 border-gray-600 text-gray-300 hover:border-blue-400 hover:text-blue-300' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600';
-                              return (
-                                <button key={opt} onClick={() => handleAnswer(cat.id, sub.id, q.id, opt)} className={cls}>
-                                  {isSel && (isPos ? <CheckCircle size={12} /> : isPar ? <AlertCircle size={12} /> : <XCircle size={12} />)}
-                                  {opt}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div className="relative">
-                            <MessageSquareText size={14} className={`absolute top-3 left-3 ${dk ? 'text-gray-500' : 'text-gray-400'}`} />
-                            <input type="text" placeholder="Tambahkan catatan/temuan fisik..." value={q.note} onChange={e => handleNote(cat.id, sub.id, q.id, e.target.value)} className={`w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border outline-none transition-all ${dk ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-500 placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-gray-700 focus:border-blue-400 placeholder-gray-400'}`} />
-                          </div>
+                {expandedCats[cat.id] && (
+                  <div id={`content-${cat.id}`}>
+                    {cat.subCategories.map((sub, si) => (
+                      <div key={sub.id} className={`border-b last:border-b-0 ${dk ? 'border-gray-700' : 'border-gray-100'}`}>
+                        <div className={`flex items-start gap-3 px-5 py-2.5 ${dk ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                          <span className="w-6 h-6 rounded-md bg-amber-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5">{String.fromCharCode(97 + si)}</span>
+                          <span className={`text-sm font-semibold flex-1 leading-snug ${dk ? 'text-gray-200' : 'text-gray-700'}`}>{sub.title.replace(/^[a-z]\.\s*/i, '')}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 transition-colors ${sub.questions.every(q => q.answer !== null) ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : `${dk ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500'}`}`}>{sub.questions.filter(q => q.answer !== null).length}/{sub.questions.length}</span>
                         </div>
-                      );
-                    })}
+                        {sub.questions.map(q => {
+                          const answered = q.answer !== null;
+                          return (
+                            <div key={q.id} className={`px-5 py-3 border-b last:border-b-0 transition-all duration-200 ${answered ? (dk ? 'bg-green-900/10' : 'bg-green-50/50') : ''} ${dk ? 'border-gray-700/50' : 'border-gray-100'}`}>
+                              <p className={`text-sm mb-2.5 leading-relaxed ${dk ? 'text-gray-300' : 'text-gray-700'}`}>{q.text}</p>
+                              <div className="flex flex-wrap gap-2 mb-2.5">
+                                {q.options.map(opt => {
+                                  const isSel = q.answer === opt;
+                                  const isPos = POSITIVE_ANSWERS.includes(opt);
+                                  const isPar = q.options.length === 3 && opt === q.options[1];
+                                  let cls = 'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ';
+                                  if (isSel) cls += isPos ? 'bg-green-500 border-green-500 text-white scale-105 shadow-sm' : isPar ? 'bg-amber-500 border-amber-500 text-white scale-105 shadow-sm' : 'bg-red-500 border-red-500 text-white scale-105 shadow-sm';
+                                  else cls += dk ? 'bg-gray-700 border-gray-600 text-gray-300 hover:border-blue-400 hover:text-blue-300 hover:bg-gray-650' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50';
+                                  return (
+                                    <button 
+                                      key={opt} 
+                                      onClick={() => handleAnswer(cat.id, sub.id, q.id, opt)} 
+                                      className={cls}
+                                      aria-pressed={isSel}
+                                    >
+                                      {isSel && (isPos ? <CheckCircle size={12} /> : isPar ? <AlertCircle size={12} /> : <XCircle size={12} />)}
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="relative">
+                                <MessageSquareText size={14} className={`absolute top-3 left-3 ${dk ? 'text-gray-500' : 'text-gray-400'}`} />
+                                <input 
+                                  type="text" 
+                                  placeholder="Tambahkan catatan/temuan fisik..." 
+                                  value={q.note} 
+                                  onChange={e => handleNote(cat.id, sub.id, q.id, e.target.value)} 
+                                  className={`w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border outline-none transition-all focus:ring-2 focus:ring-blue-500/50 ${dk ? 'bg-gray-700 border-gray-600 text-gray-200 focus:border-blue-500 placeholder-gray-500' : 'bg-gray-50 border-gray-200 text-gray-700 focus:border-blue-400 placeholder-gray-400'}`} 
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             ))}
 
             {!progress.isComplete && progress.answered > 0 && (
-              <div className={`p-4 rounded-xl text-center text-sm font-medium border ${dk ? 'bg-orange-900/20 border-orange-800 text-orange-300' : 'bg-orange-50 border-orange-200 text-orange-700'}`}>
+              <div className={`p-4 rounded-xl text-center text-sm font-medium border transition-all ${dk ? 'bg-orange-900/20 border-orange-800 text-orange-300' : 'bg-orange-50 border-orange-200 text-orange-700'}`}>
                 Masih ada <strong>{progress.total - progress.answered} pertanyaan</strong> belum dijawab.
                 {!satker.trim() && ' Nama Satker juga belum diisi.'}
                 {' '}Lengkapi untuk mengaktifkan tombol Download PDF.
@@ -716,24 +760,38 @@ export default function App() {
           </main>
 
           {/* BOTTOM ACTION BAR */}
-          <div className={`fixed bottom-0 left-0 right-0 md:left-64 z-30 border-t px-4 py-3 flex flex-wrap gap-2 shadow-2xl ${dk ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}`}>
-            <button onClick={() => setShowResetModal(true)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${dk ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+          <div className={`fixed bottom-0 left-0 right-0 md:left-64 z-30 border-t px-4 py-3 flex flex-wrap gap-2 shadow-2xl transition-colors ${dk ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <button 
+              onClick={() => setShowResetModal(true)} 
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-red-500 ${dk ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
               <RotateCcw size={14} /> Reset
             </button>
-            <button onClick={() => setShowPullModal(true)} className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${dk ? 'border-purple-700 text-purple-400 hover:bg-purple-900/20' : 'border-purple-200 text-purple-600 hover:bg-purple-50'}`}>
+            <button 
+              onClick={() => setShowPullModal(true)} 
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all duration-200 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-purple-500 ${dk ? 'border-purple-700 text-purple-400 hover:bg-purple-900/20' : 'border-purple-200 text-purple-600 hover:bg-purple-50'}`}
+            >
               <Search size={14} /> Tarik Data
             </button>
-            <button onClick={handleSubmit} disabled={isSubmitting || !satker.trim()} className="flex items-center gap-1.5 flex-1 md:flex-none justify-center px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all">
+            <button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting || !satker.trim()} 
+              className="flex items-center gap-1.5 flex-1 md:flex-none justify-center px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-800 hover:to-blue-700 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all duration-200 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
               {isSubmitting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={14} />}
               {isSubmitting ? 'Mengirim...' : 'Kirim ke Sheets'}
             </button>
             {progress.isComplete ? (
-              <button onClick={handleDownloadPDF} disabled={isPrinting} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white text-sm font-bold shadow-md transition-all disabled:opacity-60">
+              <button 
+                onClick={handleDownloadPDF} 
+                disabled={isPrinting} 
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white text-sm font-bold shadow-md transition-all duration-200 hover:scale-[1.02] disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
                 {isPrinting ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download size={14} />}
                 {isPrinting ? 'Membuat PDF...' : 'Download PDF'}
               </button>
             ) : (
-              <div className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs cursor-default ${dk ? 'border-gray-700 text-gray-600' : 'border-gray-100 text-gray-300 bg-gray-50'}`}>
+              <div className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs cursor-default transition-all ${dk ? 'border-gray-700 text-gray-600' : 'border-gray-100 text-gray-300 bg-gray-50'}`}>
                 <Download size={14} />
                 <span className="hidden sm:inline">PDF ({progress.answered}/{progress.total})</span>
               </div>
@@ -744,13 +802,23 @@ export default function App() {
 
       {/* MODAL RESET */}
       {showResetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className={`rounded-2xl p-6 max-w-sm w-full shadow-2xl ${dk ? 'bg-gray-800' : 'bg-white'}`}>
-            <h3 className="font-bold text-lg mb-2">⚠️ Reset Form?</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+          <div className={`rounded-2xl p-6 max-w-sm w-full shadow-2xl transform transition-all duration-300 scale-100 ${dk ? 'bg-gray-800' : 'bg-white'}`}>
+            <h3 id="reset-title" className="font-bold text-lg mb-2">⚠️ Reset Form?</h3>
             <p className={`text-sm mb-5 ${dk ? 'text-gray-400' : 'text-gray-500'}`}>Semua jawaban dan catatan akan dihapus. Tidak bisa dibatalkan.</p>
             <div className="flex gap-3">
-              <button onClick={() => setShowResetModal(false)} className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold ${dk ? 'border-gray-600 text-gray-300' : 'border-gray-200 text-gray-600'}`}>Batal</button>
-              <button onClick={handleReset} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold">Ya, Reset</button>
+              <button 
+                onClick={() => setShowResetModal(false)} 
+                className={`flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-all hover:bg-opacity-80 focus:outline-none focus:ring-2 focus:ring-gray-500 ${dk ? 'border-gray-600 text-gray-300' : 'border-gray-200 text-gray-600'}`}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleReset} 
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                Ya, Reset
+              </button>
             </div>
           </div>
         </div>
@@ -758,26 +826,45 @@ export default function App() {
 
       {/* MODAL TARIK DATA */}
       {showPullModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className={`rounded-2xl p-6 w-full max-w-lg shadow-2xl ${dk ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-800'}`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="pull-title">
+          <div className={`rounded-2xl p-6 w-full max-w-lg shadow-2xl transform transition-all duration-300 scale-100 ${dk ? 'bg-gray-800 text-gray-100' : 'bg-white text-gray-800'}`}>
             <div className="flex justify-between items-center mb-3">
-              <h3 className="font-bold text-base">📥 Tarik Data dari Google Sheets</h3>
-              <button onClick={() => { setShowPullModal(false); setPullSessions([]); setPullStatus({ type: '', message: '' }); }} className={`p-1.5 rounded-lg ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}><X size={18} /></button>
+              <h3 id="pull-title" className="font-bold text-base">📥 Tarik Data dari Google Sheets</h3>
+              <button 
+                onClick={() => { setShowPullModal(false); setPullSessions([]); setPullStatus({ type: '', message: '' }); }} 
+                className={`p-1.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 ${dk ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                aria-label="Tutup modal"
+              >
+                <X size={18} />
+              </button>
             </div>
             <p className={`text-xs mb-4 leading-relaxed ${dk ? 'text-gray-400' : 'text-gray-500'}`}>
               Cari data yang sudah tersimpan di Sheets berdasarkan nama satker. Cocok untuk menggabungkan isian dari beberapa anggota tim.
             </p>
             <div className="flex gap-2 mb-3">
-              <input type="text" placeholder="Ketik nama satker..." value={pullKeyword} onChange={e => setPullKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handlePullData()}
-                className={`flex-1 p-3 border rounded-xl outline-none text-sm ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-purple-400' : 'bg-white border-gray-200 focus:border-purple-500'}`} />
-              <button onClick={handlePullData} disabled={isPulling || !pullKeyword.trim()}
-                className="px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm disabled:opacity-50 flex items-center gap-2">
+              <input 
+                type="text" 
+                placeholder="Ketik nama satker..." 
+                value={pullKeyword} 
+                onChange={e => setPullKeyword(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && handlePullData()}
+                className={`flex-1 p-3 border rounded-xl outline-none text-sm transition-all focus:ring-2 focus:ring-purple-500/50 ${dk ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-purple-400' : 'bg-white border-gray-200 focus:border-purple-500'}`} 
+              />
+              <button 
+                onClick={handlePullData} 
+                disabled={isPulling || !pullKeyword.trim()}
+                className="px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm disabled:opacity-50 flex items-center gap-2 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
                 {isPulling ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search size={16} />}
                 {isPulling ? '...' : 'Cari'}
               </button>
             </div>
             {pullStatus.message && (
-              <div className={`p-3 rounded-xl text-xs mb-3 ${pullStatus.type === 'success' ? (dk ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-800') : (dk ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-800')}`}>
+              <div 
+                className={`p-3 rounded-xl text-xs mb-3 transition-all ${pullStatus.type === 'success' ? (dk ? 'bg-green-900/30 text-green-300' : 'bg-green-50 text-green-800') : (dk ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-800')}`}
+                role="status"
+                aria-live="polite"
+              >
                 {pullStatus.message}
               </div>
             )}
@@ -785,8 +872,15 @@ export default function App() {
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${dk ? 'text-gray-500' : 'text-gray-400'}`}>Pilih sesi untuk dimuat:</p>
                 {pullSessions.map((session, idx) => (
-                  <div key={idx} onClick={() => handleLoadSession(session)}
-                    className={`p-3 rounded-xl border cursor-pointer hover:border-purple-400 transition-all ${dk ? 'border-gray-600 bg-gray-700/50 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-purple-50'}`}>
+                  <div 
+                    key={idx} 
+                    onClick={() => handleLoadSession(session)}
+                    className={`p-3 rounded-xl border cursor-pointer hover:border-purple-400 transition-all duration-200 hover:scale-[1.01] ${dk ? 'border-gray-600 bg-gray-700/50 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 hover:bg-purple-50'}`}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleLoadSession(session)}
+                    aria-label={`Muat sesi ${session.satker}`}
+                  >
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-semibold text-sm">{session.satker}</p>
