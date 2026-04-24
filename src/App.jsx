@@ -11,7 +11,6 @@ import './App.css';
 function QuestionCard({ q, catId, subId, qNum, onAnswer, onNote }) {
   const [showNote, setShowNote] = useState(!!q.note);
 
-  // Logika Skor: Opsi pertama = Benar/Positif. Jika ada 3 opsi, opsi kedua = Tengah/Parsial
   const isPos = (opt, opts) => opt === opts[0];
   const isMid = (opt, opts) => opts.length === 3 && opt === opts[1];
 
@@ -204,7 +203,13 @@ export default function App() {
   const [expanded, setExpanded] = useState({ 'aspek-1': true });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({ type: '', message: '' });
-  const [isDark, setIsDark]     = useState(false);
+
+  // FIX #7: Lazy init untuk hindari FOUC theme
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('wbk_theme') === 'dark';
+  });
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -216,8 +221,6 @@ export default function App() {
 
   useEffect(() => {
     document.title = 'Form Cek Fisik ZI WBK/WBBM 2026';
-    const saved = localStorage.getItem('wbk_theme');
-    if (saved === 'dark') setIsDark(true);
   }, []);
 
   useEffect(() => {
@@ -225,7 +228,6 @@ export default function App() {
     localStorage.setItem('wbk_theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
-  // Kalkulasi total yang dibatasi maximal 100 agar aman dari bug float js
   const { scores, progress, catProgress } = useMemo(() => {
     let totalScore = 0, totalQ = 0, answeredQ = 0;
     const catScores = {}, catProg = {};
@@ -233,25 +235,22 @@ export default function App() {
       let catScore = 0, cTotal = 0, cAnswered = 0;
       cat.subCategories.forEach(sub => sub.questions.forEach(q => {
         totalQ++; cTotal++;
-        if (q.answer !== null) { 
-          answeredQ++; cAnswered++; 
-          // Opsi index ke-0 otomatis mendapatkan full poin
-          if (q.answer === q.options[0]) { 
-            catScore += q.weight; 
-            totalScore += q.weight; 
+        if (q.answer !== null) {
+          answeredQ++; cAnswered++;
+          if (q.answer === q.options[0]) {
+            catScore += q.weight;
+            totalScore += q.weight;
           }
-          // Jika ada 3 opsi, opsi index ke-1 dapat nilai setengah
-          else if (q.options.length === 3 && q.answer === q.options[1]) { 
-            catScore += q.weight / 2; 
-            totalScore += q.weight / 2; 
+          else if (q.options.length === 3 && q.answer === q.options[1]) {
+            catScore += q.weight / 2;
+            totalScore += q.weight / 2;
           }
         }
       }));
       catScores[cat.id] = catScore;
       catProg[cat.id] = { total: cTotal, answered: cAnswered };
     });
-    
-    // Pastikan tidak tembus dari limit 100 poin karena hitungan decimal floating point javascript
+
     totalScore = Math.min(100, Number(totalScore.toFixed(2)));
 
     const isComplete = totalQ === answeredQ && totalQ > 0 && satker.trim() !== '';
@@ -285,56 +284,143 @@ export default function App() {
     setShowReset(false); setSubmitStatus({ type: '', message: '' });
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // FIX #2: handleSubmit — error handling lebih ketat, tidak ada fallback ganda
+  // ═══════════════════════════════════════════════════════════
   const handleSubmit = async () => {
-    if (!satker.trim()) { setSubmitStatus({ type: 'error', message: 'Nama Satker wajib diisi!' }); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    setIsSubmitting(true); setSubmitStatus({ type: '', message: '' });
+    if (!satker.trim()) {
+      setSubmitStatus({ type: 'error', message: 'Nama Satker wajib diisi!' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    // Warning jika belum lengkap (soft check, tetap dibolehkan)
+    if (!progress.isComplete && progress.answered < progress.total) {
+      const lanjut = window.confirm(
+        `Pengisian belum lengkap (${progress.answered}/${progress.total}). ` +
+        `Tetap kirim ke Sheets?`
+      );
+      if (!lanjut) return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitStatus({ type: '', message: '' });
+
     const rows = [];
     data.forEach(cat => cat.subCategories.forEach(sub => sub.questions.forEach(q => {
       let skor = 0;
       if (q.answer === q.options[0]) skor = q.weight;
       else if (q.options.length === 3 && q.answer === q.options[1]) skor = q.weight / 2;
-      
-      // Amankan max 2 angka belakang koma pada tiap payload per soal
-      rows.push({ 
-        aspek: cat.title, 
-        subAspek: sub.title, 
-        pertanyaan: q.text, 
-        jawaban: q.answer || '', 
-        bobot: Number(q.weight.toFixed(2)), 
-        skor: Number(skor.toFixed(2)), 
-        catatan: q.note || '' 
+
+      rows.push({
+        aspek: cat.title,
+        subAspek: sub.title,
+        pertanyaan: q.text,
+        jawaban: q.answer || '',
+        bobot: Number(q.weight.toFixed(2)),
+        skor: Number(skor.toFixed(2)),
+        catatan: q.note || ''
       });
     })));
-    
-    const payload = { identity: { satker, tanggal, auditor, jabatan }, rows, totalScore: scores.total };
-    
+
+    const payload = {
+      identity: { satker: satker.trim(), tanggal, auditor: auditor.trim(), jabatan: jabatan.trim() },
+      rows,
+      totalScore: scores.total
+    };
+
     try {
-      const params = new URLSearchParams(); params.append('data', JSON.stringify(payload));
-      const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() });
+      const params = new URLSearchParams();
+      params.append('data', JSON.stringify(payload));
+
+      const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+        redirect: 'follow'
+      });
+
+      // Cek HTTP status eksplisit
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      // Cek content-type sebelum parse JSON
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error(`Respons bukan JSON. Server mengembalikan: ${text.substring(0, 100)}`);
+      }
+
       const result = await res.json();
-      if (result.status === 'success') setSubmitStatus({ type: 'success', message: `Berhasil! Sheet: "${result.sheetName}" | Skor: ${result.totalScore} | ${result.predikat}` });
-      else setSubmitStatus({ type: 'error', message: 'GAS error: ' + (result.message || 'Unknown') });
-    } catch {
-      try {
-        const p2 = new URLSearchParams(); p2.append('data', JSON.stringify(payload));
-        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: p2.toString() });
-        setSubmitStatus({ type: 'success', message: 'Data dikirim (mode fallback). Cek Google Sheets untuk konfirmasi.' });
-      } catch { setSubmitStatus({ type: 'error', message: 'Gagal terhubung. Cek koneksi internet.' }); }
-    } finally { setIsSubmitting(false); }
+
+      if (result.status === 'success') {
+        setSubmitStatus({
+          type: 'success',
+          message: `Berhasil! Sheet: "${result.sheetName}" | Skor: ${result.totalScore} | ${result.predikat}`
+        });
+      } else {
+        setSubmitStatus({
+          type: 'error',
+          message: 'GAS error: ' + (result.message || 'Status tidak diketahui')
+        });
+      }
+    } catch (err) {
+      // Log detail untuk debugging
+      console.error('[Submit Error]', err);
+      setSubmitStatus({
+        type: 'error',
+        message: `Gagal mengirim: ${err.message || 'Cek koneksi & deployment GAS'}`
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // FIX #3: handlePull — error detail + redirect follow
+  // ═══════════════════════════════════════════════════════════
   const handlePull = async () => {
-    if (!pullKeyword.trim()) { setPullStatus({ type: 'error', message: 'Masukkan nama satker.' }); return; }
-    setIsPulling(true); setPullStatus({ type: '', message: '' }); setPullSessions([]);
+    if (!pullKeyword.trim()) {
+      setPullStatus({ type: 'error', message: 'Masukkan nama satker.' });
+      return;
+    }
+    setIsPulling(true);
+    setPullStatus({ type: '', message: '' });
+    setPullSessions([]);
+
     try {
-      const res = await fetch(`${GAS_URL}?action=pull&keyword=${encodeURIComponent(pullKeyword.trim())}`);
+      const url = `${GAS_URL}?action=pull&keyword=${encodeURIComponent(pullKeyword.trim())}`;
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Respons GAS bukan JSON. Cek deployment.');
+      }
+
       const json = await res.json();
       if (json.status === 'success' && json.sessions?.length > 0) {
         setPullSessions(json.sessions);
         setPullStatus({ type: 'success', message: `Ditemukan ${json.sessions.length} sesi untuk "${pullKeyword}".` });
-      } else setPullStatus({ type: 'error', message: `Tidak ada data untuk "${pullKeyword}".` });
-    } catch { setPullStatus({ type: 'error', message: 'Gagal terhubung ke server.' }); }
-    finally { setIsPulling(false); }
+      } else {
+        setPullStatus({ type: 'error', message: `Tidak ada data untuk "${pullKeyword}".` });
+      }
+    } catch (err) {
+      console.error('[Pull Error]', err);
+      setPullStatus({ type: 'error', message: `Gagal: ${err.message}` });
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  // FIX #4: Reset state modal pull saat ditutup
+  const handleClosePull = () => {
+    setShowPull(false);
+    setPullKeyword('');
+    setPullSessions([]);
+    setPullStatus({ type: '', message: '' });
   };
 
   const handleLoadSession = (session) => {
@@ -345,8 +431,9 @@ export default function App() {
         if (q.text === row.pertanyaan) { q.answer = row.jawaban; if (row.catatan && row.catatan !== '-') q.note = row.catatan; }
       })));
     });
-    setData(newData); setSatker(session.satker || pullKeyword);
-    setShowPull(false); setPullSessions([]); setPullKeyword(''); setPullStatus({ type: '', message: '' });
+    setData(newData);
+    setSatker(session.satker || pullKeyword);
+    handleClosePull();
     setSubmitStatus({ type: 'success', message: `Data "${session.satker}" berhasil dimuat! Skor sebelumnya: ${session.totalScore}` });
   };
 
@@ -417,7 +504,6 @@ export default function App() {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} data={data} catProgress={catProgress} scores={scores} satker={satker} onNavigate={navigate} />
 
       <div className="main">
-        {/* Logo bar */}
         <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
           <button onClick={() => setSidebarOpen(true)} style={{ background: 'var(--bg)', border: '1.5px solid var(--border)', borderRadius: 8, padding: 8, color: 'var(--text-2)', display: 'flex', cursor: 'pointer' }}>
             <Menu size={22} />
@@ -430,7 +516,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Sticky header */}
         <div className="sticky-header">
           <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -452,7 +537,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Content */}
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '16px 16px 100px' }}>
           {submitStatus.message && (
             <div style={{ padding: '12px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16, background: submitStatus.type === 'success' ? 'var(--green-light)' : 'var(--red-light)', color: submitStatus.type === 'success' ? '#14532d' : '#7f1d1d', border: `1px solid ${submitStatus.type === 'success' ? '#86efac' : '#fca5a5'}` }}>
@@ -462,7 +546,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Identity card */}
           <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--border)', boxShadow: 'var(--shadow)', padding: 16, marginBottom: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>Identitas Penilaian</div>
             <div className="identity-grid">
@@ -485,7 +568,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Progress summary */}
           <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--border)', boxShadow: 'var(--shadow)', padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -504,7 +586,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Sections */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {data.map(cat => (
               <AspekSection key={cat.id} cat={cat} catProgress={catProgress} catScore={scores.catScores[cat.id] || 0}
@@ -515,7 +596,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Bottom bar */}
       <div className="bottom-bar">
         <button className="btn btn-ghost" onClick={() => setShowPull(true)} title="Tarik Data" style={{ flex: '0 0 44px', padding: '10px 0' }}>
           <Search size={18} />
@@ -535,7 +615,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* Reset Modal */}
       <Modal show={showReset} onClose={() => setShowReset(false)}>
         <div style={{ textAlign: 'center', padding: '8px 0' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
@@ -548,11 +627,10 @@ export default function App() {
         </div>
       </Modal>
 
-      {/* Pull Data Modal */}
-      <Modal show={showPull} onClose={() => setShowPull(false)}>
+      <Modal show={showPull} onClose={handleClosePull}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>Tarik Data dari Sheets</div>
-          <button onClick={() => setShowPull(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-2)', display: 'flex' }}><X size={20} /></button>
+          <button onClick={handleClosePull} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-2)', display: 'flex' }}><X size={20} /></button>
         </div>
         <label className="field-label">Nama Satker</label>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
