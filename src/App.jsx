@@ -4,26 +4,27 @@ import {
   Check, Send, Download, RotateCcw, Search,
   AlertCircle, CheckCircle, PenLine
 } from 'lucide-react';
-import { GAS_URL, POSITIVE_ANSWERS, getPredicate, initialData } from './data.js';
+import { GAS_URL, getPredicate, initialData } from './data.js';
 import './App.css';
 
 // ─── QUESTION CARD ─────────────────────────────────────────
 function QuestionCard({ q, catId, subId, qNum, onAnswer, onNote }) {
   const [showNote, setShowNote] = useState(!!q.note);
 
-  const isPos = (opt) => POSITIVE_ANSWERS.includes(opt);
+  // Logika Skor: Opsi pertama = Benar/Positif. Jika ada 3 opsi, opsi kedua = Tengah/Parsial
+  const isPos = (opt, opts) => opt === opts[0];
   const isMid = (opt, opts) => opts.length === 3 && opt === opts[1];
 
   const getBtnStyle = (opt) => {
     const base = { flex: 1, padding: '10px 8px', borderRadius: 8, fontSize: 14, fontWeight: 600, border: '2px solid', cursor: 'pointer', transition: 'all .15s', minHeight: 44, fontFamily: 'inherit' };
     if (q.answer !== opt) return { ...base, borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text-2)' };
-    if (isPos(opt)) return { ...base, background: 'var(--green)', borderColor: 'var(--green)', color: '#fff', boxShadow: '0 2px 8px rgba(22,163,74,.3)' };
+    if (isPos(opt, q.options)) return { ...base, background: 'var(--green)', borderColor: 'var(--green)', color: '#fff', boxShadow: '0 2px 8px rgba(22,163,74,.3)' };
     if (isMid(opt, q.options)) return { ...base, background: 'var(--orange)', borderColor: 'var(--orange)', color: '#fff', boxShadow: '0 2px 8px rgba(234,88,12,.3)' };
     return { ...base, background: 'var(--red)', borderColor: 'var(--red)', color: '#fff', boxShadow: '0 2px 8px rgba(220,38,38,.3)' };
   };
 
   const answered = q.answer !== null;
-  const answerIsPos = answered && isPos(q.answer);
+  const answerIsPos = answered && isPos(q.answer, q.options);
   const answerIsMid = answered && isMid(q.answer, q.options);
 
   return (
@@ -32,7 +33,7 @@ function QuestionCard({ q, catId, subId, qNum, onAnswer, onNote }) {
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', minWidth: 28, paddingTop: 2 }}>{qNum}</span>
         <div style={{ flex: 1 }}>
           <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text)', textWrap: 'pretty' }}>{q.text}</p>
-          <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Bobot: {q.weight.toFixed(3)}</p>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Bobot: {Number(q.weight).toFixed(2)}</p>
         </div>
         {answered && (
           <div style={{ width: 20, height: 20, borderRadius: '50%', background: answerIsPos ? 'var(--green)' : answerIsMid ? 'var(--orange)' : 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -100,7 +101,7 @@ function AspekSection({ cat, catProgress, catScore, expanded, onToggle, onAnswer
         <div style={{ borderTop: '1px solid var(--border)' }}>
           <div style={{ padding: '8px 16px', background: 'var(--bg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
             <span style={{ color: 'var(--text-2)' }}>Skor Aspek ini</span>
-            <span style={{ fontWeight: 700, color: 'var(--blue)', fontSize: 14 }}>{catScore.toFixed(3)}</span>
+            <span style={{ fontWeight: 700, color: 'var(--blue)', fontSize: 14 }}>{catScore.toFixed(2)}</span>
           </div>
           {cat.subCategories.map(sub => (
             <div key={sub.id}>
@@ -224,6 +225,7 @@ export default function App() {
     localStorage.setItem('wbk_theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
+  // Kalkulasi total yang dibatasi maximal 100 agar aman dari bug float js
   const { scores, progress, catProgress } = useMemo(() => {
     let totalScore = 0, totalQ = 0, answeredQ = 0;
     const catScores = {}, catProg = {};
@@ -231,15 +233,27 @@ export default function App() {
       let catScore = 0, cTotal = 0, cAnswered = 0;
       cat.subCategories.forEach(sub => sub.questions.forEach(q => {
         totalQ++; cTotal++;
-        if (q.answer !== null) { answeredQ++; cAnswered++; }
-        if (q.answer !== null) {
-          if (POSITIVE_ANSWERS.includes(q.answer)) { catScore += q.weight; totalScore += q.weight; }
-          else if (q.options.length === 3 && q.answer === q.options[1]) { catScore += q.weight / 2; totalScore += q.weight / 2; }
+        if (q.answer !== null) { 
+          answeredQ++; cAnswered++; 
+          // Opsi index ke-0 otomatis mendapatkan full poin
+          if (q.answer === q.options[0]) { 
+            catScore += q.weight; 
+            totalScore += q.weight; 
+          }
+          // Jika ada 3 opsi, opsi index ke-1 dapat nilai setengah
+          else if (q.options.length === 3 && q.answer === q.options[1]) { 
+            catScore += q.weight / 2; 
+            totalScore += q.weight / 2; 
+          }
         }
       }));
       catScores[cat.id] = catScore;
       catProg[cat.id] = { total: cTotal, answered: cAnswered };
     });
+    
+    // Pastikan tidak tembus dari limit 100 poin karena hitungan decimal floating point javascript
+    totalScore = Math.min(100, Number(totalScore.toFixed(2)));
+
     const isComplete = totalQ === answeredQ && totalQ > 0 && satker.trim() !== '';
     return { scores: { total: totalScore, catScores }, progress: { total: totalQ, answered: answeredQ, isComplete }, catProgress: catProg };
   }, [data, satker]);
@@ -279,9 +293,21 @@ export default function App() {
       let skor = 0;
       if (q.answer === q.options[0]) skor = q.weight;
       else if (q.options.length === 3 && q.answer === q.options[1]) skor = q.weight / 2;
-      rows.push({ aspek: cat.title, subAspek: sub.title, pertanyaan: q.text, jawaban: q.answer || '', bobot: Number(q.weight.toFixed(4)), skor: Number(skor.toFixed(4)), catatan: q.note || '' });
+      
+      // Amankan max 2 angka belakang koma pada tiap payload per soal
+      rows.push({ 
+        aspek: cat.title, 
+        subAspek: sub.title, 
+        pertanyaan: q.text, 
+        jawaban: q.answer || '', 
+        bobot: Number(q.weight.toFixed(2)), 
+        skor: Number(skor.toFixed(2)), 
+        catatan: q.note || '' 
+      });
     })));
-    const payload = { identity: { satker, tanggal, auditor, jabatan }, rows, totalScore: Number(scores.total.toFixed(2)) };
+    
+    const payload = { identity: { satker, tanggal, auditor, jabatan }, rows, totalScore: scores.total };
+    
     try {
       const params = new URLSearchParams(); params.append('data', JSON.stringify(payload));
       const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() });
@@ -360,11 +386,11 @@ export default function App() {
       });
       const tableBody = [];
       data.forEach((cat, ci) => {
-        tableBody.push([{ content: String(ci + 1), styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }, { content: `${cat.title}   |   Skor: ${(scores.catScores[cat.id] || 0).toFixed(3)}`, colSpan: 5, styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }]);
+        tableBody.push([{ content: String(ci + 1), styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }, { content: `${cat.title}   |   Skor: ${(scores.catScores[cat.id] || 0).toFixed(2)}`, colSpan: 5, styles: { fontStyle: 'bold', fillColor: [219, 234, 254] } }]);
         cat.subCategories.forEach((sub, si) => {
           if (sub.questions.length > 1) tableBody.push(['', '', { content: sub.title, colSpan: 4, styles: { fontStyle: 'italic', fillColor: [240, 244, 255] } }]);
           sub.questions.forEach((q, qi) => {
-            const isP = q.answer && POSITIVE_ANSWERS.includes(q.answer);
+            const isP = q.answer && q.answer === q.options[0];
             tableBody.push([`${ci + 1}.${String.fromCharCode(97 + si)}.${qi + 1}`, '', sub.questions.length === 1 ? sub.title : '', q.text,
               { content: q.answer || '-', styles: { textColor: q.answer ? (isP ? [21, 128, 61] : [220, 38, 38]) : [100, 100, 100], fontStyle: q.answer ? 'bold' : 'normal' } }, q.note || '']);
           });
