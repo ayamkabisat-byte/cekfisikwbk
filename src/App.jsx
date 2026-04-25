@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Menu, X, ChevronDown, ChevronUp, Sun, Moon,
   Check, Send, Download, RotateCcw, Search,
-  AlertCircle, CheckCircle, PenLine
+  AlertCircle, CheckCircle, PenLine, Users
 } from 'lucide-react';
 import { GAS_URL, getPredicate, initialData } from './data.js';
 import './App.css';
@@ -204,7 +204,6 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState({ type: '', message: '' });
 
-  // FIX #7: Lazy init untuk hindari FOUC theme
   const [isDark, setIsDark] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('wbk_theme') === 'dark';
@@ -218,6 +217,7 @@ export default function App() {
   const [isPulling, setIsPulling]    = useState(false);
   const [pullStatus, setPullStatus]  = useState({ type: '', message: '' });
   const [pullSessions, setPullSessions] = useState([]);
+  const [isCompiling, setIsCompiling] = useState(false);  // ← BARU
 
   useEffect(() => {
     document.title = 'Form Cek Fisik ZI WBK/WBBM 2026';
@@ -284,9 +284,6 @@ export default function App() {
     setShowReset(false); setSubmitStatus({ type: '', message: '' });
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // FIX #2: handleSubmit — error handling lebih ketat, tidak ada fallback ganda
-  // ═══════════════════════════════════════════════════════════
   const handleSubmit = async () => {
     if (!satker.trim()) {
       setSubmitStatus({ type: 'error', message: 'Nama Satker wajib diisi!' });
@@ -294,11 +291,10 @@ export default function App() {
       return;
     }
 
-    // Warning jika belum lengkap (soft check, tetap dibolehkan)
     if (!progress.isComplete && progress.answered < progress.total) {
       const lanjut = window.confirm(
         `Pengisian belum lengkap (${progress.answered}/${progress.total}). ` +
-        `Tetap kirim ke Sheets?`
+        `Tetap kirim ke Sheets sebagai draft parsial?`
       );
       if (!lanjut) return;
     }
@@ -340,16 +336,12 @@ export default function App() {
         redirect: 'follow'
       });
 
-      // Cek HTTP status eksplisit
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 
-      // Cek content-type sebelum parse JSON
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
         const text = await res.text();
-        throw new Error(`Respons bukan JSON. Server mengembalikan: ${text.substring(0, 100)}`);
+        throw new Error(`Respons bukan JSON. Server: ${text.substring(0, 100)}`);
       }
 
       const result = await res.json();
@@ -366,7 +358,6 @@ export default function App() {
         });
       }
     } catch (err) {
-      // Log detail untuk debugging
       console.error('[Submit Error]', err);
       setSubmitStatus({
         type: 'error',
@@ -377,9 +368,6 @@ export default function App() {
     }
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // FIX #3: handlePull — error detail + redirect follow
-  // ═══════════════════════════════════════════════════════════
   const handlePull = async () => {
     if (!pullKeyword.trim()) {
       setPullStatus({ type: 'error', message: 'Masukkan nama satker.' });
@@ -415,7 +403,52 @@ export default function App() {
     }
   };
 
-  // FIX #4: Reset state modal pull saat ditutup
+  // ═══════════════════════════════════════════════════════════
+  // BARU: handleCompile — gabungkan semua sesi jadi 1 state utuh
+  // ═══════════════════════════════════════════════════════════
+  const handleCompile = async () => {
+    if (!pullKeyword.trim()) {
+      setPullStatus({ type: 'error', message: 'Masukkan nama satker dulu.' });
+      return;
+    }
+    setIsCompiling(true);
+    setPullStatus({ type: '', message: '' });
+
+    try {
+      const url = `${GAS_URL}?action=compile&keyword=${encodeURIComponent(pullKeyword.trim())}`;
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Respons GAS bukan JSON. Cek deployment.');
+      }
+
+      const json = await res.json();
+
+      if (json.status !== 'success' || !json.compiled) {
+        setPullStatus({ type: 'error', message: json.message || 'Kompilasi gagal.' });
+        return;
+      }
+
+      // Load compiled session ke form
+      handleLoadSession(json.compiled);
+
+      const meta = json.compiled._compiledMeta || {};
+      const contribs = meta.contributors || [];
+      setSubmitStatus({
+        type: 'success',
+        message: `Kompilasi berhasil! Menggabungkan ${meta.totalAnsweredMerged || 0} jawaban dari ${contribs.length} anggota: ${contribs.join(', ')}`
+      });
+    } catch (err) {
+      console.error('[Compile Error]', err);
+      setPullStatus({ type: 'error', message: `Gagal: ${err.message}` });
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
   const handleClosePull = () => {
     setShowPull(false);
     setPullKeyword('');
@@ -434,7 +467,10 @@ export default function App() {
     setData(newData);
     setSatker(session.satker || pullKeyword);
     handleClosePull();
-    setSubmitStatus({ type: 'success', message: `Data "${session.satker}" berhasil dimuat! Skor sebelumnya: ${session.totalScore}` });
+    // Note: submitStatus di-set oleh handleCompile atau handleLoadSession caller
+    if (!submitStatus.message) {
+      setSubmitStatus({ type: 'success', message: `Data "${session.satker}" berhasil dimuat! Skor sebelumnya: ${session.totalScore}` });
+    }
   };
 
   const formatDate = d => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
@@ -635,10 +671,34 @@ export default function App() {
         <label className="field-label">Nama Satker</label>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <input value={pullKeyword} onChange={e => setPullKeyword(e.target.value)} placeholder="Ketik nama satker..." onKeyDown={e => e.key === 'Enter' && handlePull()} />
-          <button className="btn btn-primary" onClick={handlePull} disabled={isPulling} style={{ flexShrink: 0, minWidth: 80 }}>
+          <button className="btn btn-primary" onClick={handlePull} disabled={isPulling || isCompiling} style={{ flexShrink: 0, minWidth: 80 }}>
             {isPulling ? '...' : 'Cari'}
           </button>
         </div>
+
+        {/* ═══ TOMBOL KOMPILASI — BARU ═══ */}
+        <button
+          onClick={handleCompile}
+          disabled={!pullKeyword.trim() || isCompiling || isPulling}
+          className="btn"
+          style={{
+            width: '100%',
+            background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+            color: '#fff',
+            border: 'none',
+            marginBottom: 14,
+            opacity: (!pullKeyword.trim() || isCompiling) ? .5 : 1,
+            cursor: (!pullKeyword.trim() || isCompiling) ? 'not-allowed' : 'pointer'
+          }}
+          title="Gabungkan semua sesi anggota tim jadi 1 state utuh"
+        >
+          <Users size={16} /> {isCompiling ? 'Mengompilasi...' : 'Kompilasi Semua Sesi Tim'}
+        </button>
+        <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 14, lineHeight: 1.5, fontStyle: 'italic' }}>
+          💡 Gunakan <b>Cari</b> untuk memuat 1 sesi saja (per anggota),
+          atau <b>Kompilasi</b> untuk menggabungkan semua jawaban tim jadi 1 form utuh (ketua tim).
+        </div>
+
         {pullStatus.message && (
           <div style={{ padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 12, background: pullStatus.type === 'success' ? 'var(--green-light)' : 'var(--red-light)', color: pullStatus.type === 'success' ? '#14532d' : '#7f1d1d', display: 'flex', gap: 8, alignItems: 'center' }}>
             {pullStatus.type === 'success' ? <CheckCircle size={15} /> : <AlertCircle size={15} />} {pullStatus.message}
